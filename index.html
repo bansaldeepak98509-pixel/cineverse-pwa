@@ -569,6 +569,26 @@ Pathaan"></textarea>
 </main>
 <main id="page-settings" class="page">
 <h2 class="section-title">⚙️ Settings</h2>
+<div class="settings-group" id="cvAccountGroup"><h4>☁️ Account &amp; Cloud Sync</h4>
+<div id="cvSignedOut">
+<p style="font-size:.78rem;color:var(--muted);line-height:1.45;margin-bottom:8px">Sign up karke apna data cloud mein rakhiye — browser data clear hone pe bhi safe rahega, aur doosre phone pe login karke wahi data mil jaayega.</p>
+<input id="cvEmail" type="email" autocomplete="email" placeholder="Email" style="width:100%;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:8px"/>
+<input id="cvPass" type="password" autocomplete="current-password" placeholder="Password (kam se kam 6 characters)" style="width:100%;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:8px"/>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<button class="btn btn-primary btn-sm" onclick="cvSignUp()">✨ Sign up</button>
+<button class="btn btn-secondary btn-sm" onclick="cvSignIn()">Sign in</button>
+</div>
+<button class="btn btn-outline btn-sm btn-block" style="margin-top:8px" onclick="cvGoogle()">🔵 Continue with Google</button>
+<p id="cvAuthMsg" style="font-size:.78rem;color:var(--warn);line-height:1.4;margin-top:8px"></p>
+</div>
+<div id="cvSignedIn" style="display:none">
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><div id="cvAvatar"></div><div style="min-width:0"><div id="cvName" style="font-weight:600;font-size:.9rem"></div><div id="cvMail" style="font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis"></div></div></div>
+<div class="setting-row"><span>Status</span><span id="cvAcctStatus" style="font-size:.8rem;color:var(--muted)">—</span></div>
+<div class="setting-row"><span>Last sync</span><span id="cvLastSync" style="font-size:.8rem;color:var(--muted)">—</span></div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-primary btn-sm" onclick="cvSyncNow()">🔄 Sync now</button><button class="btn btn-ghost btn-sm" onclick="cvSignOut()">Sign out</button></div>
+</div>
+</div>
+
 <div class="settings-group"><h4>Appearance</h4>
 <div class="setting-row"><span>Dark Mode</span><div class="toggle on" id="darkToggle" role="switch" tabindex="0"></div></div>
 </div>
@@ -1052,6 +1072,248 @@ document.addEventListener('DOMContentLoaded',init);
     <button type="button" class="action-sheet-cancel" id="actionSheetCancel">Cancel</button>
   </div>
 </div>
+
+<script>
+/* ===== CineVerse - Account & Cloud Sync (Firebase) ===== */
+(function(){
+  'use strict';
+  var SDK='10.14.1';
+  var FBCFG=(function(){
+    try{var raw=localStorage.getItem('cv_firebase_config_v1');if(raw){var p=JSON.parse(raw);if(p&&p.apiKey)return p}}catch(e){}
+    return {
+      apiKey:"AIzaSyBShgAQ6IGpT6A9zwEQQA0oJzrB7Nbhvh0",
+      authDomain:"cineverse-c375b.firebaseapp.com",
+      projectId:"cineverse-c375b",
+      storageBucket:"cineverse-c375b.firebasestorage.app",
+      messagingSenderId:"455329890076",
+      appId:"1:455329890076:web:f06319092c44b3a1d4c4d9"
+    };
+  })();
+  var META='cv_cloud_meta_v1', HAD='cv_had_acct';
+  var auth=null,db=null,user=null,sdkP=null,timer=null,busy=false;
+
+  function el(id){return document.getElementById(id)}
+  function toast(m){try{showToast(m)}catch(e){}}
+  function esc(v){try{return escapeHtml(v)}catch(e){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]})}}
+  function syncKeys(){try{return Object.keys(STORAGE).map(function(k){return STORAGE[k]}).filter(function(k){return typeof k==='string'&&k!==META})}catch(e){return []}}
+  function readMeta(){try{return JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){return {}}}
+  function writeMeta(m){try{localStorage.setItem(META,JSON.stringify(m))}catch(e){}}
+  function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
+  function msg(t,c){var p=el('cvAuthMsg');if(p){p.textContent=t||'';p.style.color=c||'var(--warn)'}}
+
+  function authErr(e){
+    var c=(e&&e.code)||'';
+    var map={
+      'auth/unauthorized-domain':'Yeh domain Firebase mein authorized nahi hai. Firebase Console > Authentication > Settings > Authorized domains mein "bansaldeepak98509-pixel.github.io" add karein.',
+      'auth/operation-not-allowed':'Yeh sign-in method band hai. Firebase Console > Authentication > Sign-in method mein Email/Password (aur Google) enable karein.',
+      'auth/email-already-in-use':'Yeh email pehle se registered hai - "Sign in" dabaiye.',
+      'auth/wrong-password':'Password galat hai.',
+      'auth/invalid-credential':'Email ya password galat hai.',
+      'auth/invalid-login-credentials':'Email ya password galat hai.',
+      'auth/weak-password':'Password kam se kam 6 characters ka rakhein.',
+      'auth/invalid-email':'Email sahi nahi lag raha.',
+      'auth/missing-password':'Password daaliye.',
+      'auth/popup-closed-by-user':'Sign-in popup band ho gaya.',
+      'auth/popup-blocked':'Popup block ho gaya - dobara koshish karein.',
+      'auth/network-request-failed':'Network issue - internet check karein.',
+      'auth/too-many-requests':'Bahut zyada koshish - thodi der baad try karein.'
+    };
+    return map[c]||(e&&e.message)||'Kuch galat ho gaya';
+  }
+  function fail(e){status('Sync error','var(--accent)');msg(authErr(e),'var(--accent)');try{console.warn('[cloud]',e)}catch(x){}}
+
+  function loadSDK(){
+    if(window.firebase&&window.firebase.initializeApp)return Promise.resolve();
+    if(sdkP)return sdkP;
+    sdkP=new Promise(function(res,rej){
+      var names=['firebase-app-compat','firebase-auth-compat','firebase-firestore-compat'];
+      var i=0;
+      (function next(){
+        if(i>=names.length)return res();
+        var sc=document.createElement('script');
+        sc.src='https://www.gstatic.com/firebasejs/'+SDK+'/'+names[i++]+'.js';
+        sc.async=true;
+        sc.onload=next;
+        sc.onerror=function(){rej(new Error('Firebase SDK load nahi hui - internet check karein'))};
+        document.head.appendChild(sc);
+      })();
+    });
+    return sdkP;
+  }
+
+  function ensure(){
+    if(auth&&db)return Promise.resolve();
+    return loadSDK().then(function(){
+      if(!window.firebase)throw new Error('Firebase SDK missing');
+      var app=(firebase.apps&&firebase.apps.length)?firebase.app():firebase.initializeApp(FBCFG);
+      auth=firebase.auth();
+      db=firebase.firestore();
+      try{auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)}catch(e){}
+      auth.onAuthStateChanged(onAuth);
+    });
+  }
+
+  function render(){
+    var out=el('cvSignedOut'),inn=el('cvSignedIn');
+    if(!out||!inn)return;
+    if(user){
+      out.style.display='none';inn.style.display='block';
+      var n=el('cvName'),m=el('cvMail'),av=el('cvAvatar');
+      if(n)n.textContent=user.displayName||String(user.email||'').split('@')[0]||'User';
+      if(m)m.textContent=user.email||'';
+      if(av){
+        if(user.photoURL){
+          av.innerHTML='<img src="'+esc(user.photoURL)+'" alt="" referrerpolicy="no-referrer" style="width:38px;height:38px;border-radius:50%;object-fit:cover"/>';
+        }else{
+          var ini=((user.displayName||user.email||'U').charAt(0)||'U').toUpperCase();
+          av.innerHTML='<div style="width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700">'+esc(ini)+'</div>';
+        }
+      }
+      var l=el('cvLastSync'),mm=readMeta();
+      if(l)l.textContent=mm.__last?new Date(mm.__last).toLocaleString():'—';
+    }else{
+      out.style.display='block';inn.style.display='none';status('Signed out');
+    }
+  }
+
+  function col(){return db.collection('users').doc(user.uid).collection('settings')}
+
+  function pushAll(){
+    if(!user||busy)return Promise.resolve();
+    busy=true;status('Syncing…','var(--warn)');
+    var m=readMeta(),now=Date.now(),ks=syncKeys();
+    return ks.reduce(function(p,k){
+      return p.then(function(){
+        var v=localStorage.getItem(k);
+        var ref=col().doc('k_'+k);
+        if(v==null)return ref.delete().catch(function(){});
+        return ref.set({v:v,t:now});
+      });
+    },Promise.resolve()).then(function(){
+      ks.forEach(function(k){m[k]=now});
+      m.__last=now;
+      writeMeta(m);
+      return col().doc('meta').set({lastSync:now,email:user.email||'',device:String(navigator.userAgent||'').slice(0,140)});
+    }).then(function(){
+      busy=false;status('Synced','var(--ok)');
+      var l=el('cvLastSync');if(l)l.textContent=new Date(now).toLocaleString();
+    }).catch(function(e){busy=false;fail(e)});
+  }
+
+  function pullAll(){
+    if(!user)return Promise.resolve(false);
+    busy=true;
+    return col().get().then(function(snap){
+      var m=readMeta(),changed=false;
+      snap.forEach(function(d){
+        if(d.id.indexOf('k_')!==0)return;
+        var k=d.id.slice(2),data=d.data()||{};
+        if(typeof data.v!=='string')return;
+        var rt=+data.t||0,lt=+m[k]||0;
+        if(localStorage.getItem(k)==null||rt>lt){localStorage.setItem(k,data.v);m[k]=rt;changed=true}
+      });
+      writeMeta(m);busy=false;
+      return changed;
+    }).catch(function(e){busy=false;throw e});
+  }
+
+  function pullThenPush(){
+    return pullAll().then(function(changed){
+      if(changed){
+        status('Restored from cloud','var(--ok)');
+        toast('Cloud se data restore ho gaya - app refresh ho raha hai');
+        setTimeout(function(){location.reload()},900);
+        return;
+      }
+      return pushAll();
+    });
+  }
+
+  function onAuth(u){
+    user=u||null;
+    render();
+    if(user){
+      try{localStorage.setItem(HAD,'1')}catch(e){}
+      status('Connecting…','var(--warn)');
+      pullThenPush().catch(fail);
+    }else{
+      status('Signed out');
+    }
+  }
+
+  window.cvSignUp=function(){
+    var em=(el('cvEmail')&&el('cvEmail').value||'').trim();
+    var pw=(el('cvPass')&&el('cvPass').value)||'';
+    if(!em||!pw)return msg('Email aur password dono chahiye');
+    msg('Account ban raha hai…','var(--muted)');
+    ensure().then(function(){return auth.createUserWithEmailAndPassword(em,pw)})
+      .then(function(){msg('Account ban gaya ✓','var(--ok)');toast('Welcome! Account ban gaya')})
+      .catch(function(e){msg(authErr(e),'var(--accent)')});
+  };
+
+  window.cvSignIn=function(){
+    var em=(el('cvEmail')&&el('cvEmail').value||'').trim();
+    var pw=(el('cvPass')&&el('cvPass').value)||'';
+    if(!em||!pw)return msg('Email aur password dono chahiye');
+    msg('Sign in ho raha hai…','var(--muted)');
+    ensure().then(function(){return auth.signInWithEmailAndPassword(em,pw)})
+      .then(function(){msg('Sign in ho gaya ✓','var(--ok)')})
+      .catch(function(e){msg(authErr(e),'var(--accent)')});
+  };
+
+  window.cvGoogle=function(){
+    msg('Google sign-in khul raha hai…','var(--muted)');
+    ensure().then(function(){
+      var p=new firebase.auth.GoogleAuthProvider();
+      return auth.signInWithPopup(p).catch(function(e){
+        if(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'){
+          return auth.signInWithRedirect(p);
+        }
+        throw e;
+      });
+    }).then(function(){msg('','')}).catch(function(e){msg(authErr(e),'var(--accent)')});
+  };
+
+  window.cvSignOut=function(){
+    if(!auth)return;
+    auth.signOut().then(function(){
+      try{localStorage.removeItem(HAD)}catch(e){}
+      msg('','');toast('Sign out ho gaya');
+    }).catch(function(e){msg(authErr(e),'var(--accent)')});
+  };
+
+  window.cvSyncNow=function(){
+    ensure().then(function(){
+      if(!user)return msg('Pehle sign in karein');
+      return pullThenPush();
+    }).catch(fail);
+  };
+
+  var _set=localStorage.setItem.bind(localStorage);
+  localStorage.setItem=function(k,v){
+    _set(k,v);
+    try{
+      if(user&&!busy&&syncKeys().indexOf(k)>-1){
+        clearTimeout(timer);
+        timer=setTimeout(function(){pushAll()},4000);
+      }
+    }catch(e){}
+  };
+
+  function boot(){
+    render();
+    var had=false;
+    try{had=localStorage.getItem(HAD)==='1'}catch(e){}
+    if(!had){status('Signed out');return}
+    ensure().catch(function(e){
+      msg('Cloud sync load nahi hui - internet check karein','var(--warn)');
+      try{console.warn('[cloud]',e)}catch(x){}
+    });
+  }
+
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
+})();
+</script>
 
 </body>
 </html>
