@@ -1097,15 +1097,22 @@ document.addEventListener('DOMContentLoaded',init);
     };
   })();
   var META='cv_cloud_meta_v1', HAD='cv_had_acct';
-  var auth=null,db=null,user=null,sdkP=null,timer=null,busy=false;
+  var _rawSet=localStorage.setItem.bind(localStorage);
+  var _rawRemove=localStorage.removeItem.bind(localStorage);
+  var auth=null,db=null,user=null,sdkP=null,timer=null,busy=false,bootTimer=null;
+  var localWrites={};
 
   function el(id){return document.getElementById(id)}
   function toast(m){try{showToast(m)}catch(e){}}
   function esc(v){try{return escapeHtml(v)}catch(e){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]})}}
   function syncKeys(){try{return Object.keys(STORAGE).map(function(k){return STORAGE[k]}).filter(function(k){return typeof k==='string'&&k!==META})}catch(e){return []}}
+  function isSyncKey(k){return syncKeys().indexOf(k)>-1}
   function readMeta(){try{return JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){return {}}}
-  function writeMeta(m){try{localStorage.setItem(META,JSON.stringify(m))}catch(e){}}
-  /* Small IndexedDB store: survives localStorage.clear() done by "Import all data" */
+  function writeMeta(m){try{_rawSet(META,JSON.stringify(m))}catch(e){}}
+  function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
+  function msg(t,c){var p=el('cvAuthMsg');if(p){p.textContent=t||'';p.style.color=c||'var(--warn)'}}
+
+  /* ---------- IndexedDB: survives the localStorage.clear() done by "Import all data" ---------- */
   function idbOpen(){
     return new Promise(function(res,rej){
       try{
@@ -1148,14 +1155,10 @@ document.addEventListener('DOMContentLoaded',init);
       });
     }).catch(function(){return false});
   }
-  function markLocalNewest(){
-    var m=readMeta(),now=Date.now();
-    syncKeys().forEach(function(k){m[k]=now});
-    writeMeta(m);
-  }
-  function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
-  function msg(t,c){var p=el('cvAuthMsg');if(p){p.textContent=t||'';p.style.color=c||'var(--warn)'}}
+  function saveWrites(){idbSet('writes',localWrites)}
+  function stampLocal(k){localWrites[k]=Date.now();saveWrites()}
 
+  /* ---------- errors ---------- */
   function authErr(e){
     var c=(e&&e.code)||'';
     var map={
@@ -1168,6 +1171,7 @@ document.addEventListener('DOMContentLoaded',init);
       'auth/weak-password':'Password kam se kam 6 characters ka rakhein.',
       'auth/invalid-email':'Email sahi nahi lag raha.',
       'auth/missing-password':'Password daaliye.',
+      'auth/missing-email':'Email daaliye.',
       'auth/popup-closed-by-user':'Sign-in popup band ho gaya.',
       'auth/popup-blocked':'Popup block ho gaya - dobara koshish karein.',
       'auth/network-request-failed':'Network issue - internet check karein.',
@@ -1176,12 +1180,17 @@ document.addEventListener('DOMContentLoaded',init);
       'auth/requires-recent-login':'Session purana ho gaya hai - sign out karke dobara sign in karein, phir try karein.',
       'auth/provider-already-linked':'Is account pe password pehle se set hai - naya password daal ke "Set / change password" dabaiye.',
       'auth/credential-already-in-use':'Is email pe pehle se alag email/password account hai.',
-      'auth/missing-email':'Email daaliye.'
+      'permission-denied':'Firestore rules publish nahi hain - Firebase Console > Firestore > Rules mein rules paste karke Publish karein.',
+      'unavailable':'Cloud se connection nahi bana - internet check karein.'
     };
-    return map[c]||(e&&e.message)||'Kuch galat ho gaya';
+    if(map[c])return map[c];
+    var m=(e&&e.message)||'Kuch galat ho gaya';
+    if(/permission/i.test(m))return map['permission-denied'];
+    return m;
   }
   function fail(e){status('Sync error','var(--accent)');msg(authErr(e),'var(--accent)');try{console.warn('[cloud]',e)}catch(x){}}
 
+  /* ---------- firebase boot ---------- */
   function loadSDK(){
     if(window.firebase&&window.firebase.initializeApp)return Promise.resolve();
     if(sdkP)return sdkP;
@@ -1200,7 +1209,6 @@ document.addEventListener('DOMContentLoaded',init);
     });
     return sdkP;
   }
-
   function ensure(){
     if(auth&&db)return Promise.resolve();
     return loadSDK().then(function(){
@@ -1236,6 +1244,7 @@ document.addEventListener('DOMContentLoaded',init);
     }
   }
 
+  /* ---------- sync engine ---------- */
   function col(){return db.collection('users').doc(user.uid).collection('settings')}
 
   function pushAll(){
@@ -1260,57 +1269,56 @@ document.addEventListener('DOMContentLoaded',init);
     }).catch(function(e){busy=false;fail(e)});
   }
 
+  /* local wins when this device changed a key after the cloud copy; otherwise cloud wins */
   function pullAll(){
-    if(!user)return Promise.resolve(false);
+    if(!user)return Promise.resolve({changed:false,push:false});
     busy=true;
     return col().get().then(function(snap){
-      var m=readMeta(),changed=false;
+      var m=readMeta(),changed=false,needPush=false;
       snap.forEach(function(d){
         if(d.id.indexOf('k_')!==0)return;
         var k=d.id.slice(2),data=d.data()||{};
         if(typeof data.v!=='string')return;
-        var rt=+data.t||0,lt=+m[k]||0;
-        if(localStorage.getItem(k)==null||rt>lt){localStorage.setItem(k,data.v);m[k]=rt;changed=true}
+        var rt=+data.t||0;
+        var lt=Math.max(+localWrites[k]||0,+m[k]||0);
+        var lv=localStorage.getItem(k);
+        if(lv==null){_rawSet(k,data.v);localWrites[k]=0;m[k]=rt;changed=true;return}
+        if(lt>rt){needPush=true;m[k]=lt;return}
+        if(rt>lt){_rawSet(k,data.v);localWrites[k]=0;m[k]=rt;changed=true}
       });
-      writeMeta(m);busy=false;
-      return changed;
+      writeMeta(m);saveWrites();busy=false;
+      return {changed:changed,push:needPush};
     }).catch(function(e){busy=false;throw e});
   }
 
   function pullThenPush(){
-    return pullAll().then(function(changed){
-      if(changed){
-        status('Restored from cloud','var(--ok)');
-        toast('Cloud se data restore ho gaya - app refresh ho raha hai');
-        setTimeout(function(){location.reload()},900);
-        return;
-      }
-      return pushAll();
+    return pullAll().then(function(r){
+      var changed=!!(r&&r.changed),needPush=!!(r&&r.push);
+      return (needPush?pushAll():Promise.resolve()).then(function(){
+        if(changed&&!needPush){
+          status('Restored from cloud','var(--ok)');
+          toast('Cloud se data restore ho gaya - app refresh ho raha hai');
+          setTimeout(function(){location.reload()},900);
+        }
+      });
     });
   }
 
   function onAuth(u){
     user=u||null;
+    if(bootTimer){clearTimeout(bootTimer);bootTimer=null}
     render();
     if(user){
-      try{localStorage.setItem(HAD,'1')}catch(e){}
+      try{_rawSet(HAD,'1')}catch(e){}
       idbSet('had',1);
       status('Connecting…','var(--warn)');
-      idbGet('pendingImport').then(function(ts){
-        if(ts&&(Date.now()-Number(ts))<600000){
-          idbDel('pendingImport');
-          markLocalNewest();
-          toast('Imported data cloud pe bheja ja raha hai');
-          return pushAll();
-        }
-        if(ts)idbDel('pendingImport');
-        return pullThenPush();
-      }).catch(fail);
+      pullThenPush().catch(fail);
     }else{
       status('Signed out');
     }
   }
 
+  /* ---------- public actions ---------- */
   window.cvSignUp=function(){
     var em=(el('cvEmail')&&el('cvEmail').value||'').trim();
     var pw=(el('cvPass')&&el('cvPass').value)||'';
@@ -1383,8 +1391,8 @@ document.addEventListener('DOMContentLoaded',init);
   window.cvSignOut=function(){
     if(!auth)return;
     auth.signOut().then(function(){
-      try{localStorage.removeItem(HAD)}catch(e){}
-      idbDel('had');idbDel('pendingImport');
+      try{_rawRemove(HAD)}catch(e){}
+      idbDel('had');localWrites={};saveWrites();
       msg('','');toast('Sign out ho gaya');
     }).catch(function(e){msg(authErr(e),'var(--accent)')});
   };
@@ -1396,13 +1404,16 @@ document.addEventListener('DOMContentLoaded',init);
     }).catch(fail);
   };
 
-  var _set=localStorage.setItem.bind(localStorage);
+  /* ---------- track local edits (works for imports too, they go through setItem) ---------- */
   localStorage.setItem=function(k,v){
-    _set(k,v);
+    _rawSet(k,v);
     try{
-      if(user&&!busy&&syncKeys().indexOf(k)>-1){
-        clearTimeout(timer);
-        timer=setTimeout(function(){pushAll()},4000);
+      if(isSyncKey(k)){
+        stampLocal(k);
+        if(user&&!busy){
+          clearTimeout(timer);
+          timer=setTimeout(function(){pushAll()},4000);
+        }
       }
     }catch(e){}
   };
@@ -1411,37 +1422,38 @@ document.addEventListener('DOMContentLoaded',init);
     render();
     var had=false;
     try{had=localStorage.getItem(HAD)==='1'}catch(e){}
-    var probe;
-    if(had){
-      probe=Promise.resolve(true);
-    }else{
-      probe=idbGet('had').then(function(v){
-        if(v)return true;
-        if(indexedDB&&indexedDB.databases){
-          return indexedDB.databases().then(function(l){
-            return (l||[]).some(function(d){return d&&d.name==='firebaseLocalStorageDb'});
-          }).catch(function(){return false});
-        }
-        return false;
-      }).catch(function(){return false});
-    }
-    probe.then(function(load){
-      if(!load){status('Signed out');return}
+    var probe=had?Promise.resolve(true):idbGet('had').then(function(v){
+      if(v)return true;
+      if(indexedDB&&indexedDB.databases){
+        return indexedDB.databases().then(function(l){
+          return (l||[]).some(function(d){return d&&d.name==='firebaseLocalStorageDb'});
+        }).catch(function(){return false});
+      }
+      return false;
+    }).catch(function(){return false});
+
+    var writesReady=idbGet('writes').then(function(w){
+      if(w&&typeof w==='object'){for(var k in w){if(Object.prototype.hasOwnProperty.call(w,k))localWrites[k]=w[k]}}
+    }).catch(function(){});
+
+    Promise.all([probe,writesReady]).then(function(r){
+      if(!r[0]){status('Signed out');render();return}
+      var out=el('cvSignedOut');
+      if(out)out.style.display='none';
+      status('Connecting…','var(--warn)');
+      bootTimer=setTimeout(function(){if(!user)render()},14000);
       ensure().catch(function(e){
+        if(bootTimer){clearTimeout(bootTimer);bootTimer=null}
+        render();
         msg('Cloud sync load nahi hui - internet check karein','var(--warn)');
         try{console.warn('[cloud]',e)}catch(x){}
       });
     });
-    var imp=el('importAllDataFile');
-    if(imp){
-      imp.addEventListener('change',function(){
-        idbSet('pendingImport',Date.now());
-      });
-    }
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
+
 </script>
 
 </body>
