@@ -1,6 +1,6 @@
 /* CineVerse Ultimate service worker */
-const CACHE = 'cineverse-v5';
-const IMG_CACHE = 'cineverse-v5-img';
+const CACHE = 'cineverse-v6';
+const IMG_CACHE = 'cineverse-v6-img';
 const SHELL = [
   './',
   './index.html',
