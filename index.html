@@ -1289,7 +1289,7 @@ document.addEventListener('DOMContentLoaded',init);
         var prep=Promise.resolve();
         if(shrink){
           /* keep the bigger, older copy safe before anything else */
-          prep=withTimeout(histRef(prev.t||(now-1)).set({data:prev.data,t:prev.t||(now-1),savedAt:now,items:countItems(prev.data)}),25000,'hist').catch(function(){});
+          prep=withTimeout(histRef(prev.t||(now-1)).set({data:prev.data,t:prev.t||(now-1),savedAt:now,items:countItems(prev.data)}),25000,'hist').then(function(){pruneHistory()}).catch(function(){});
         }
         return prep.then(function(){
           if(shrink&&!force){
@@ -1330,6 +1330,22 @@ document.addEventListener('DOMContentLoaded',init);
       out.sort(function(a,b){return b.t-a.t});
       return out;
     });
+  }
+
+  function pruneHistory(){
+    return withTimeout(db.collection('users').doc(user.uid).collection('settings').get(),15000,'hist')
+      .then(function(snap){
+        var hs=[];
+        snap.forEach(function(d){
+          if(d.id.charAt(0)!=='h')return;
+          hs.push({id:d.id,t:+((d.data()||{}).t)||0});
+        });
+        hs.sort(function(a,b){return b.t-a.t});
+        var extra=hs.slice(3);
+        return Promise.all(extra.map(function(h){
+          return db.collection('users').doc(user.uid).collection('settings').doc(h.id).delete().catch(function(){});
+        }));
+      }).catch(function(){});
   }
 
   function applyRemote(dataStr,remoteT){
@@ -1606,5 +1622,120 @@ document.addEventListener('DOMContentLoaded',init);
 
 </script>
 
+<div id="cvClearModal" style="position:fixed;inset:0;z-index:3000;display:none;place-items:center;background:rgba(0,0,0,.75);padding:20px">
+<div style="max-width:340px;width:100%;background:#12121a;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:18px">
+<h3 style="font-size:1rem;margin-bottom:8px;color:#fff">Poora tracker clear karna hai?</h3>
+<p id="cvClearInfo" style="font-size:.82rem;color:#b0b0c0;line-height:1.45;margin-bottom:10px"></p>
+<p style="font-size:.78rem;color:#b0b0c0;margin-bottom:6px">Confirm karne ke liye niche <b>CLEAR</b> likhiye:</p>
+<input id="cvClearInput" type="text" autocomplete="off" autocapitalize="characters" placeholder="CLEAR" style="width:100%;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#fff;margin-bottom:10px"/>
+<div style="display:flex;gap:8px">
+<button id="cvClearCancel" class="btn btn-ghost btn-sm" style="flex:1;justify-content:center">Cancel</button>
+<button id="cvClearGo" class="btn btn-sm" style="flex:1;justify-content:center;background:#e50914;color:#fff;opacity:.45" disabled>Clear all</button>
+</div>
+</div>
+</div>
+<script>
+/* ===== Safety net for "Clear all" + undo ===== */
+(function(){
+  'use strict';
+  var UNDO='cv_undo_tracker', WINDOW_MS=10*60*1000;
+  function $(id){return document.getElementById(id)}
+  function toast(m){try{showToast(m)}catch(e){}}
+
+  function readUndo(){
+    try{
+      var raw=localStorage.getItem(UNDO);
+      if(!raw)return null;
+      var o=JSON.parse(raw);
+      if(!o||!o.data||!o.t)return null;
+      if(Date.now()-o.t>WINDOW_MS){localStorage.removeItem(UNDO);return null}
+      return o;
+    }catch(e){return null}
+  }
+  function saveUndo(){
+    try{
+      var arr=(typeof trackerMovies!=='undefined'&&Array.isArray(trackerMovies))?trackerMovies:[];
+      localStorage.setItem(UNDO,JSON.stringify({t:Date.now(),data:JSON.stringify(arr)}));
+    }catch(e){}
+  }
+  function setUndoLabel(){
+    var btn=$('clearTrackerBtn');
+    if(!btn)return;
+    var u=readUndo();
+    if(u){btn.textContent='\u21A9\uFE0F Undo clear ('+JSON.parse(u.data).length+')';btn.dataset.cvUndo='1';btn.classList.remove('btn-danger');btn.classList.add('btn-success')}
+    else{btn.textContent='Clear all';delete btn.dataset.cvUndo;btn.classList.add('btn-danger');btn.classList.remove('btn-success')}
+  }
+  function doUndo(){
+    var u=readUndo();
+    if(!u){toast('Undo ka time nikal gaya');setUndoLabel();return}
+    try{
+      trackerMovies=JSON.parse(u.data);
+      if(typeof saveTracker==='function')saveTracker();
+      if(typeof renderTracker==='function')renderTracker();
+      if(typeof updateTrackerStats==='function')updateTrackerStats();
+      localStorage.removeItem(UNDO);
+      toast('Data wapas aa gaya \u2713');
+    }catch(e){toast('Undo fail hua')}
+    setUndoLabel();
+  }
+
+  function openModal(){
+    var m=$('cvClearModal');if(!m)return;
+    var n=(typeof trackerMovies!=='undefined'&&Array.isArray(trackerMovies))?trackerMovies.length:0;
+    var info=$('cvClearInfo');
+    if(info)info.innerHTML='Is device se <b>'+n+' movies</b> hata di jaayengi. 10 minute tak "Undo clear" se wapas aa sakti hain, aur cloud par bhi purana version safe rahega.';
+    var inp=$('cvClearInput'),go=$('cvClearGo');
+    if(inp){inp.value=''}
+    if(go){go.disabled=true;go.style.opacity='.45'}
+    m.style.display='grid';
+    if(inp)setTimeout(function(){try{inp.focus()}catch(e){}},120);
+  }
+  function closeModal(){var m=$('cvClearModal');if(m)m.style.display='none'}
+
+  document.addEventListener('DOMContentLoaded',function(){
+    var btn=$('clearTrackerBtn');
+    if(btn){
+      btn.addEventListener('click',function(ev){
+        if(btn.dataset.cvUndo==='1'){
+          ev.preventDefault();ev.stopImmediatePropagation();
+          doUndo();
+          return;
+        }
+        var n=(typeof trackerMovies!=='undefined'&&Array.isArray(trackerMovies))?trackerMovies.length:0;
+        if(!n)return; /* let the app show its "Empty" toast */
+        ev.preventDefault();ev.stopImmediatePropagation();
+        openModal();
+      },true);
+    }
+
+    var inp=$('cvClearInput'),go=$('cvClearGo'),cancel=$('cvClearCancel'),m=$('cvClearModal');
+    if(inp&&go){
+      inp.addEventListener('input',function(){
+        var ok=inp.value.trim().toUpperCase()==='CLEAR';
+        go.disabled=!ok;go.style.opacity=ok?'1':'.45';
+      });
+    }
+    if(go){
+      go.addEventListener('click',function(){
+        saveUndo();
+        try{
+          trackerMovies=[];
+          if(typeof saveTracker==='function')saveTracker();
+          if(typeof renderTracker==='function')renderTracker();
+          if(typeof updateTrackerStats==='function')updateTrackerStats();
+          toast('Tracker clear ho gaya - 10 min tak Undo available');
+        }catch(e){}
+        closeModal();
+        setUndoLabel();
+        setTimeout(setUndoLabel,WINDOW_MS+1000);
+      });
+    }
+    if(cancel)cancel.addEventListener('click',closeModal);
+    if(m)m.addEventListener('click',function(e){if(e.target===m)closeModal()});
+    setUndoLabel();
+    setInterval(setUndoLabel,60000);
+  });
+})();
+</script>
 </body>
 </html>
