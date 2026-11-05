@@ -1039,7 +1039,7 @@ for(const r of library.filter(x=>x.title===BAD).slice(0,60)){try{const f=await l
 for(const r of trackerMovies.filter(x=>x.name===BAD&&(x.tmdbId||x.catalogId)).slice(0,60)){try{const f=await look(r.catalogId,r.tmdbId);if(f&&!trackerMovies.some(t=>t!==r&&t.name.toLowerCase()===f.title.toLowerCase())){r.name=f.title;if(f.poster&&!r.poster)r.poster=f.poster;if(f.year&&!r.year)r.year=f.year;trk++}}catch(e){}}
 if(lib)saveLibrary();if(trk)saveTracker();if(lib||trk){if(currentPage==='tracker')renderTracker();if(currentPage==='watchlist')renderWatchlist()}}
 
-function init(){loadLibrary();loadTracker();loadCatalog();applyTheme();initEvents();ctInit();renderHome();updateTrackerStats();if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js',{scope:'./'}).catch(()=>{})}}
+function init(){loadLibrary();loadTracker();loadCatalog();applyTheme();initEvents();ctInit();renderHome();updateTrackerStats();if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js',{scope:'./'}).catch(()=>{})};try{const cvPersist=()=>{try{if(!(navigator.storage&&navigator.storage.persist))return;navigator.storage.persisted().then(p=>{if(p)return;navigator.storage.persist().then(ok=>{if(ok&&!localStorage.getItem('cv_persist_done')){localStorage.setItem('cv_persist_done','1');if(typeof showToast==='function')showToast('Data protection ON — browser ise apne aap delete nahi karega')}}).catch(()=>{})}).catch(()=>{})}catch(e){}};cvPersist();document.addEventListener('click',cvPersist,{once:true})}catch(e){}}
 document.addEventListener('DOMContentLoaded',init);
 </script>
 
