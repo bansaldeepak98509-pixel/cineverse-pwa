@@ -1100,19 +1100,17 @@ document.addEventListener('DOMContentLoaded',init);
       appId:"1:455329890076:web:f06319092c44b3a1d4c4d9"
     };
   })();
-  var META='cv_cloud_meta_v1', HAD='cv_had_acct';
+  var META='cv_cloud_meta_v1', HAD='cv_had_acct', BACK='cv_back_settings';
   var _rawSet=localStorage.setItem.bind(localStorage);
   var _rawRemove=localStorage.removeItem.bind(localStorage);
-  var auth=null,db=null,user=null,sdkP=null,timer=null,busy=false,bootTimer=null;
-  var localWrites={};
+  var auth=null,db=null,user=null,sdkP=null,timer=null,busy=false,watchdog=null;
+  var dirty=false,dirtyAt=0,lastT=0;
 
   function el(id){return document.getElementById(id)}
   function toast(m){try{showToast(m)}catch(e){}}
   function esc(v){try{return escapeHtml(v)}catch(e){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]})}}
   function syncKeys(){try{return Object.keys(STORAGE).map(function(k){return STORAGE[k]}).filter(function(k){return typeof k==='string'&&k!==META})}catch(e){return []}}
   function isSyncKey(k){return syncKeys().indexOf(k)>-1}
-  function readMeta(){try{return JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){return {}}}
-  function writeMeta(m){try{_rawSet(META,JSON.stringify(m))}catch(e){}}
   function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
   function detail(t){var d=el('cvSyncDetail');if(d)d.textContent=t||''}
   function msg(t,c){['cvAuthMsg','cvSyncMsg'].forEach(function(id){var p=el(id);if(p){p.textContent=t||'';p.style.color=c||'var(--warn)'}})}
@@ -1131,49 +1129,37 @@ document.addEventListener('DOMContentLoaded',init);
   function idbGet(k){
     return idbOpen().then(function(db){
       return new Promise(function(res){
-        try{
-          var g=db.transaction('kv','readonly').objectStore('kv').get(k);
-          g.onsuccess=function(){res(g.result)};g.onerror=function(){res(null)};
-        }catch(e){res(null)}
+        try{var g=db.transaction('kv','readonly').objectStore('kv').get(k);g.onsuccess=function(){res(g.result)};g.onerror=function(){res(null)}}catch(e){res(null)}
       });
     }).catch(function(){return null});
   }
   function idbSet(k,v){
     return idbOpen().then(function(db){
       return new Promise(function(res){
-        try{
-          var tx=db.transaction('kv','readwrite');
-          tx.objectStore('kv').put(v,k);
-          tx.oncomplete=function(){res(true)};tx.onerror=function(){res(false)};
-        }catch(e){res(false)}
+        try{var tx=db.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=function(){res(true)};tx.onerror=function(){res(false)}}catch(e){res(false)}
       });
     }).catch(function(){return false});
   }
   function idbDel(k){
     return idbOpen().then(function(db){
       return new Promise(function(res){
-        try{
-          var tx=db.transaction('kv','readwrite');
-          tx.objectStore('kv').delete(k);
-          tx.oncomplete=function(){res(true)};tx.onerror=function(){res(false)};
-        }catch(e){res(false)}
+        try{var tx=db.transaction('kv','readwrite');tx.objectStore('kv').delete(k);tx.oncomplete=function(){res(true)};tx.onerror=function(){res(false)}}catch(e){res(false)}
       });
     }).catch(function(){return false});
   }
-  function saveWrites(){idbSet('writes',localWrites)}
+  function saveState(){idbSet('state',{dirty:dirty,dirtyAt:dirtyAt,lastT:lastT})}
   function withTimeout(p,ms,label){
     return Promise.race([p,new Promise(function(_,rej){
       setTimeout(function(){var e=new Error('timeout');e.code='timeout';e.label=label||'';rej(e)},ms);
     })]);
   }
-  function stampLocal(k){localWrites[k]=Date.now();saveWrites()}
 
   /* ---------- errors ---------- */
   function authErr(e){
     var c=(e&&e.code)||'';
     var map={
       'auth/unauthorized-domain':'Yeh domain Firebase mein authorized nahi hai. Firebase Console > Authentication > Settings > Authorized domains mein "bansaldeepak98509-pixel.github.io" add karein.',
-      'auth/operation-not-allowed':'Yeh sign-in method band hai. Firebase Console > Authentication > Sign-in method mein Email/Password (aur Google) enable karein.',
+      'auth/operation-not-allowed':'Yeh sign-in method band hai. Authentication > Sign-in method mein Email/Password (aur Google) enable karein.',
       'auth/email-already-in-use':'Yeh email pehle se registered hai - "Sign in" dabaiye.',
       'auth/wrong-password':'Password galat hai.',
       'auth/invalid-credential':'Email ya password galat hai.',
@@ -1187,19 +1173,27 @@ document.addEventListener('DOMContentLoaded',init);
       'auth/network-request-failed':'Network issue - internet check karein.',
       'auth/too-many-requests':'Bahut zyada koshish - thodi der baad try karein.',
       'auth/user-not-found':'Is email ka koi email/password account nahi hai. Pehle sign up karein, ya Google se sign in karein.',
-      'auth/requires-recent-login':'Session purana ho gaya hai - sign out karke dobara sign in karein, phir try karein.',
-      'auth/provider-already-linked':'Is account pe password pehle se set hai - naya password daal ke "Set / change password" dabaiye.',
+      'auth/requires-recent-login':'Session purana hai - sign out karke dobara sign in karein, phir try karein.',
+      'auth/provider-already-linked':'Password pehle se set hai - naya password daal ke dabaiye.',
       'auth/credential-already-in-use':'Is email pe pehle se alag email/password account hai.',
-      'permission-denied':'Firestore rules publish nahi hain - Firebase Console > Firestore > Rules mein rules paste karke Publish karein.',
+      'permission-denied':'Firestore rules publish nahi hain - Firestore > Rules mein rules paste karke Publish karein.',
       'unavailable':'Cloud se connection nahi bana - internet check karein.',
-      'timeout':'Cloud se 20 second tak koi jawab nahi aaya. Internet check karein, ya Firebase Console > Firestore mein rules publish karein.'
+      'timeout':'Cloud se 15 second tak jawab nahi aaya - internet check karein.',
+      'invalid-argument':'Data bahut bada hai - cloud pe bheja nahi ja saka.'
     };
     if(map[c])return map[c];
     var m=(e&&e.message)||'Kuch galat ho gaya';
     if(/permission/i.test(m))return map['permission-denied'];
     return m;
   }
-  function fail(e){status('Sync error','var(--accent)');msg(authErr(e),'var(--accent)');try{console.warn('[cloud]',e)}catch(x){}}
+  function fail(e){
+    if(watchdog){clearTimeout(watchdog);watchdog=null}
+    status('Sync error','var(--accent)');
+    msg(authErr(e),'var(--accent)');
+    detail('error: '+((e&&e.code)||(e&&e.message)||'unknown'));
+    try{console.warn('[cloud]',e)}catch(x){}
+  }
+  function ok(txt,d){status('Synced','var(--ok)');if(txt)detail(txt);if(d!==undefined)msg('','')}
 
   /* ---------- firebase boot ---------- */
   function loadSDK(){
@@ -1248,101 +1242,107 @@ document.addEventListener('DOMContentLoaded',init);
           av.innerHTML='<div style="width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700">'+esc(ini)+'</div>';
         }
       }
-      var l=el('cvLastSync'),mm=readMeta();
-      if(l)l.textContent=mm.__last?new Date(mm.__last).toLocaleString():'—';
+      var l=el('cvLastSync');
+      if(l)l.textContent=lastT?new Date(lastT).toLocaleString():'—';
     }else{
       out.style.display='block';inn.style.display='none';status('Signed out');
     }
   }
 
-  /* ---------- sync engine ---------- */
-  function col(){return db.collection('users').doc(user.uid).collection('settings')}
+  /* ---------- single-document sync ---------- */
+  function docRef(){return db.collection('users').doc(user.uid).collection('settings').doc('state')}
 
-  function pushAll(){
-    if(!user||busy)return Promise.resolve();
-    busy=true;status('Syncing…','var(--warn)');detail('');
-    var m=readMeta(),now=Date.now(),ks=syncKeys(),err=null,done=0;
-    var chain=ks.reduce(function(p,k){
-      return p.then(function(){
-        var v=localStorage.getItem(k);
-        var ref=col().doc('k_'+k);
-        var op=(v==null)?ref.delete().catch(function(){}):ref.set({v:v,t:now});
-        return withTimeout(op,12000,'write '+k).then(function(){done++;detail('uploaded '+done+'/'+ks.length)})
-          .catch(function(e){if(!err)err=e});
-      });
-    },Promise.resolve());
-    return withTimeout(chain,25000,'push').then(function(){
-      if(err){busy=false;fail(err);detail('upload stopped: '+((err&&err.code)||(err&&err.message)||'error'));return}
-      ks.forEach(function(k){m[k]=now});
-      m.__last=now;
-      writeMeta(m);
-      return withTimeout(col().doc('meta').set({lastSync:now,email:user.email||'',device:String(navigator.userAgent||'').slice(0,140)}),15000,'meta')
-        .then(function(){
-          busy=false;status('Synced','var(--ok)');detail('uploaded '+ks.length+' items');
-          var l=el('cvLastSync');if(l)l.textContent=new Date(now).toLocaleString();
-        }).catch(function(e){busy=false;fail(e);detail('meta write failed: '+((e&&e.code)||'error'))});
-    }).catch(function(e){busy=false;fail(e)});
+  function snapshotLocal(){
+    var out={};
+    syncKeys().forEach(function(k){var v=localStorage.getItem(k);if(v!=null)out[k]=v});
+    return out;
   }
 
-  /* local wins when this device changed a key after the cloud copy; otherwise cloud wins */
-  function pullAll(){
-    if(!user)return Promise.resolve({changed:false,push:false});
-    busy=true;detail('');
-    var ks=syncKeys(),m=readMeta(),out={changed:false,push:false,err:null},done=0;
-    var chain=ks.reduce(function(p,k){
-      return p.then(function(){
-        return withTimeout(col().doc('k_'+k).get(),12000,'read '+k).then(function(d){
-          done++;detail('read '+done+'/'+ks.length);
-          if(!d||!d.exists)return;
-          var data=d.data()||{};
-          if(typeof data.v!=='string')return;
-          var rt=+data.t||0;
-          var lt=Math.max(+localWrites[k]||0,+m[k]||0);
-          var lv=localStorage.getItem(k);
-          if(lv==null){_rawSet(k,data.v);localWrites[k]=0;m[k]=rt;out.changed=true;return}
-          if(lt>rt){out.push=true;m[k]=lt;return}
-          if(rt>lt){_rawSet(k,data.v);localWrites[k]=0;m[k]=rt;out.changed=true}
-        }).catch(function(e){if(!out.err){out.err=e;detail('read '+k+' failed: '+((e&&e.code)||(e&&e.message)||'error'))}});
-      });
-    },Promise.resolve());
-    return withTimeout(chain,20000,'pull').then(function(){
-      writeMeta(m);saveWrites();busy=false;
-      return out;
-    }).catch(function(e){
-      busy=false;
-      if(!out.err)out.err=e;
-      detail('cloud reply nahi aaya: '+((e&&e.code)||(e&&e.message)||'error'));
-      return out;
+  function pushAll(){
+    if(!user)return Promise.resolve(false);
+    if(busy)return Promise.resolve(false);
+    busy=true;status('Syncing…','var(--warn)');detail('uploading…');
+    var now=Date.now();
+    var payload;
+    try{payload=JSON.stringify(snapshotLocal())}catch(e){busy=false;fail(e);return Promise.resolve(false)}
+    return withTimeout(docRef().set({data:payload,t:now,email:user.email||'',device:String(navigator.userAgent||'').slice(0,120)}),20000,'write')
+      .then(function(){
+        busy=false;dirty=false;dirtyAt=0;lastT=now;saveState();
+        ok('uploaded '+Math.round(payload.length/1024)+' KB');
+        var l=el('cvLastSync');if(l)l.textContent=new Date(now).toLocaleString();
+        return true;
+      })
+      .catch(function(e){busy=false;fail(e);return false});
+  }
+
+  function applyRemote(dataStr,remoteT){
+    var obj=null;
+    try{obj=JSON.parse(dataStr||'{}')}catch(e){obj=null}
+    if(!obj||typeof obj!=='object')throw new Error('cloud data kharab hai');
+    var changed=false;
+    syncKeys().forEach(function(k){
+      if(typeof obj[k]==='string'&&localStorage.getItem(k)!==obj[k]){_rawSet(k,obj[k]);changed=true}
+    });
+    dirty=false;dirtyAt=0;lastT=remoteT||Date.now();saveState();
+    return changed;
+  }
+
+  function pullOnce(){
+    if(!user)return Promise.resolve('none');
+    return withTimeout(docRef().get(),15000,'read').then(function(snap){
+      if(!snap||!snap.exists){
+        detail('cloud khali hai - upload kar rahe hain');
+        return pushAll().then(function(){return 'pushed'});
+      }
+      var d=snap.data()||{},rt=+d.t||0;
+      if(dirty&&dirtyAt>rt){
+        detail('is device ka data naya hai - upload');
+        return pushAll().then(function(){return 'pushed'});
+      }
+      if(rt>lastT){
+        var changed=applyRemote(d.data,rt);
+        return changed?'pulled':'same';
+      }
+      ok('already up to date');
+      return 'same';
     });
   }
 
-  function pullThenPush(){
-    return pullAll().then(function(r){
-      var changed=!!(r&&r.changed),needPush=!!(r&&r.push);
-      if(r&&r.err&&!changed&&!needPush){
+  function syncNow(reloadOnPull){
+    if(!user)return Promise.resolve();
+    busy=false;
+    status('Connecting…','var(--warn)');detail('');
+    if(watchdog)clearTimeout(watchdog);
+    watchdog=setTimeout(function(){
+      if(!user)return;
+      var b=el('cvAcctStatus');
+      var t=b?b.textContent:'';
+      if(t==='Connecting…'||t==='Syncing…'){
         status('Sync error','var(--accent)');
-        fail(r.err);
-        return;
+        detail('cloud se jawab nahi aaya (timeout)');
+        msg('Cloud se 15 second mein jawab nahi aaya. Internet check karein ya "Cloud pe bhejo" dabaiye.','var(--accent)');
       }
-      return (needPush?pushAll():Promise.resolve()).then(function(){
-        if(changed&&!needPush){
-          status('Restored from cloud','var(--ok)');
-          toast('Cloud se data restore ho gaya - app refresh ho raha hai');
-          setTimeout(function(){location.reload()},900);
-        }
-      });
+    },16000);
+    return pullOnce().then(function(r){
+      if(watchdog){clearTimeout(watchdog);watchdog=null}
+      if(r==='pulled'&&reloadOnPull){
+        try{sessionStorage.setItem(BACK,'1')}catch(e){}
+        toast('Cloud se data aa gaya - app refresh ho raha hai');
+        setTimeout(function(){location.reload()},700);
+      }
+    }).catch(function(e){
+      if(watchdog){clearTimeout(watchdog);watchdog=null}
+      fail(e);
     });
   }
 
   function onAuth(u){
     user=u||null;
-    if(bootTimer){clearTimeout(bootTimer);bootTimer=null}
     render();
     if(user){
       try{_rawSet(HAD,'1')}catch(e){}
       idbSet('had',1);
-      status('Connecting…','var(--warn)');
-      try{pullThenPush().catch(fail)}catch(e){fail(e)}
+      try{syncNow(true)}catch(e){fail(e)}
     }else{
       status('Signed out');
     }
@@ -1358,7 +1358,6 @@ document.addEventListener('DOMContentLoaded',init);
       .then(function(){msg('Account ban gaya ✓','var(--ok)');toast('Welcome! Account ban gaya')})
       .catch(function(e){msg(authErr(e),'var(--accent)')});
   };
-
   window.cvSignIn=function(){
     var em=(el('cvEmail')&&el('cvEmail').value||'').trim();
     var pw=(el('cvPass')&&el('cvPass').value)||'';
@@ -1368,7 +1367,6 @@ document.addEventListener('DOMContentLoaded',init);
       .then(function(){msg('Sign in ho gaya ✓','var(--ok)')})
       .catch(function(e){msg(authErr(e),'var(--accent)')});
   };
-
   window.cvGoogle=function(){
     msg('Google sign-in khul raha hai…','var(--muted)');
     ensure().then(function(){
@@ -1381,7 +1379,6 @@ document.addEventListener('DOMContentLoaded',init);
       });
     }).then(function(){msg('','')}).catch(function(e){msg(authErr(e),'var(--accent)')});
   };
-
   window.cvForgotPassword=function(){
     var em=(el('cvEmail')&&el('cvEmail').value||'').trim();
     if(!em)return msg('Pehle apna email daaliye, phir "Forgot password?" dabaiye');
@@ -1390,7 +1387,6 @@ document.addEventListener('DOMContentLoaded',init);
       .then(function(){msg('Reset link '+em+' pe bhej diya - mail kholiye aur naya password set kariye','var(--ok)');toast('Reset email bheja gaya')})
       .catch(function(e){msg(authErr(e),'var(--accent)')});
   };
-
   window.cvSetPassword=function(){
     var pw=(el('cvPass2')&&el('cvPass2').value)||'';
     if(!user)return msg('Pehle sign in karein');
@@ -1399,7 +1395,7 @@ document.addEventListener('DOMContentLoaded',init);
     msg('Password set ho raha hai…','var(--muted)');
     var cred=firebase.auth.EmailAuthProvider.credential(user.email,pw);
     user.linkWithCredential(cred).then(function(){
-      msg('Password set ✓ - ab email/password se bhi sign in kar sakte hain, data wahi rahega','var(--ok)');
+      msg('Password set ✓ - ab email/password se bhi sign in kar sakte hain','var(--ok)');
       toast('Password set ho gaya');
       if(el('cvPass2'))el('cvPass2').value='';
     }).catch(function(e){
@@ -1411,78 +1407,79 @@ document.addEventListener('DOMContentLoaded',init);
         }).catch(function(e2){msg(authErr(e2),'var(--accent)')});
       }
       if(c==='auth/email-already-in-use'||c==='auth/credential-already-in-use'){
-        msg('Is email pe pehle se ek alag email/password account hai (alag data ke saath). Uska password "Forgot password?" se reset kariye, ya Google se hi sign in karte rahiye.','var(--accent)');
+        msg('Is email pe pehle se alag email/password account hai. Uska password "Forgot password?" se reset kariye, ya Google se hi sign in karte rahiye.','var(--accent)');
         return;
       }
       msg(authErr(e),'var(--accent)');
     });
   };
-
   window.cvSignOut=function(){
     if(!auth)return;
     auth.signOut().then(function(){
       try{_rawRemove(HAD)}catch(e){}
-      idbDel('had');localWrites={};saveWrites();
+      idbDel('had');dirty=false;dirtyAt=0;lastT=0;saveState();
       msg('','');toast('Sign out ho gaya');
     }).catch(function(e){msg(authErr(e),'var(--accent)')});
   };
 
+  /* explicit, always-works buttons */
   window.cvUploadLocal=function(){
     ensure().then(function(){
       if(!user)return msg('Pehle sign in karein');
-      syncKeys().forEach(function(k){if(localStorage.getItem(k)!=null)localWrites[k]=Date.now()});
-      saveWrites();
+      dirty=true;dirtyAt=Date.now();saveState();
       toast('Is device ka data cloud pe bheja ja raha hai');
       return pushAll();
     }).catch(fail);
   };
-
   window.cvDownloadCloud=function(){
     ensure().then(function(){
       if(!user)return msg('Pehle sign in karein');
-      status('Downloading…','var(--warn)');detail('');
-      var ks=syncKeys(),m=readMeta(),err=null;
-      return ks.reduce(function(p,k){
-        return p.then(function(){
-          return withTimeout(col().doc('k_'+k).get(),15000,'read '+k).then(function(d){
-            if(!d||!d.exists)return;
-            var data=d.data()||{};
-            if(typeof data.v!=='string')return;
-            _rawSet(k,data.v);localWrites[k]=0;m[k]=+data.t||0;
-          }).catch(function(e){if(!err)err=e});
-        });
-      },Promise.resolve()).then(function(){
-        writeMeta(m);saveWrites();
-        if(err){fail(err);return}
-        status('Downloaded','var(--ok)');toast('Cloud ka data is device pe aa gaya - refresh ho raha hai');
-        setTimeout(function(){location.reload()},900);
-      });
+      status('Connecting…','var(--warn)');detail('downloading…');
+      if(watchdog)clearTimeout(watchdog);
+      return withTimeout(docRef().get(),15000,'read').then(function(snap){
+        if(!snap||!snap.exists){
+          status('Sync error','var(--accent)');detail('cloud khali hai');
+          msg('Cloud pe abhi koi data nahi hai - pehle "Cloud pe bhejo" dabaiye.','var(--warn)');
+          return;
+        }
+        var d=snap.data()||{};
+        var changed=applyRemote(d.data,+d.t||0);
+        if(!changed){ok('cloud data pehle se is device pe hai');return}
+        try{sessionStorage.setItem(BACK,'1')}catch(e){}
+        status('Downloaded','var(--ok)');
+        toast('Cloud ka data aa gaya - app refresh ho raha hai');
+        setTimeout(function(){location.reload()},700);
+      }).catch(fail);
     }).catch(fail);
   };
-
   window.cvSyncNow=function(){
     ensure().then(function(){
       if(!user)return msg('Pehle sign in karein');
-      return pullThenPush();
+      return syncNow(true);
     }).catch(fail);
   };
 
-  /* ---------- track local edits (works for imports too, they go through setItem) ---------- */
+  /* ---------- track local edits (imports go through setItem too) ---------- */
   localStorage.setItem=function(k,v){
     _rawSet(k,v);
     try{
       if(isSyncKey(k)){
-        stampLocal(k);
-        if(user&&!busy){
-          clearTimeout(timer);
-          timer=setTimeout(function(){pushAll()},4000);
-        }
+        dirty=true;dirtyAt=Date.now();saveState();
+        if(user&&!busy){clearTimeout(timer);timer=setTimeout(function(){pushAll()},5000)}
       }
     }catch(e){}
   };
 
   function boot(){
     render();
+    /* come back to Settings after a reload instead of the home page */
+    try{
+      if(sessionStorage.getItem(BACK)==='1'){
+        sessionStorage.removeItem(BACK);
+        setTimeout(function(){try{if(typeof nav==='function')nav('settings')}catch(e){}},500);
+      }
+    }catch(e){}
+
     var had=false;
     try{had=localStorage.getItem(HAD)==='1'}catch(e){}
     var probe=had?Promise.resolve(true):idbGet('had').then(function(v){
@@ -1495,20 +1492,22 @@ document.addEventListener('DOMContentLoaded',init);
       return false;
     }).catch(function(){return false});
 
-    var writesReady=idbGet('writes').then(function(w){
-      if(w&&typeof w==='object'){for(var k in w){if(Object.prototype.hasOwnProperty.call(w,k))localWrites[k]=w[k]}}
+    var stateReady=idbGet('state').then(function(s){
+      if(s&&typeof s==='object'){
+        dirty=!!s.dirty;dirtyAt=+s.dirtyAt||0;lastT=+s.lastT||0;
+      }
     }).catch(function(){});
 
-    Promise.all([probe,writesReady]).then(function(r){
+    Promise.all([probe,stateReady]).then(function(r){
       if(!r[0]){status('Signed out');render();return}
       var out=el('cvSignedOut');
       if(out)out.style.display='none';
       status('Connecting…','var(--warn)');
-      bootTimer=setTimeout(function(){if(!user)render()},14000);
       ensure().catch(function(e){
-        if(bootTimer){clearTimeout(bootTimer);bootTimer=null}
         render();
-        msg('Cloud sync load nahi hui - internet check karein','var(--warn)');
+        status('Sync error','var(--accent)');
+        detail('Firebase load nahi hui');
+        msg(authErr(e),'var(--accent)');
         try{console.warn('[cloud]',e)}catch(x){}
       });
     });
