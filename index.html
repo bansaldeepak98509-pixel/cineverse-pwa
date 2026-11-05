@@ -347,7 +347,7 @@ try{document.documentElement.setAttribute('data-design',localStorage.getItem('cv
    Settings se ek toggle se turant purana design wapas aa jaata hai.
    ============================================================ */
 html[data-design="v2"]{
-  --bg:#08080e;--bg2:#0f0f18;--card:rgba(255,255,255,.055);--card-h:rgba(255,255,255,.1);
+  --bg:#05050a;--bg2:#0b0b12;--card:rgba(255,255,255,.055);--card-h:rgba(255,255,255,.1);
   --text:#f6f6fa;--text2:#a9a9c0;--muted:#6f6f88;
   --accent:#ff2f42;--accent-h:#ff4b5b;--accent-soft:rgba(255,47,66,.14);
   --ok:#2fd67b;--ok-soft:rgba(47,214,123,.14);--warn:#f5b81f;--warn-soft:rgba(245,184,31,.14);
@@ -369,9 +369,8 @@ html[data-design="v2"][data-theme="light"]{
 /* ---------- shell / background ---------- */
 html[data-design="v2"] body{
   background:
-    radial-gradient(1100px 600px at 12% -8%,rgba(255,47,66,.16),transparent 60%),
-    radial-gradient(900px 620px at 92% 0%,rgba(88,101,242,.14),transparent 62%),
-    linear-gradient(180deg,#08080e 0%,#08080e 45%,#0b0b13 100%);
+    radial-gradient(760px 380px at 50% -14%,rgba(255,47,66,.03),transparent 62%),
+    linear-gradient(180deg,#05050a 0%,#040409 60%,#05050a 100%);
   background-attachment:fixed;
   letter-spacing:.005em;
   padding-bottom:calc(var(--nav-h) + var(--safe-b) + 16px);
@@ -437,7 +436,7 @@ html[data-design="v2"] .section-title .see-all:hover{color:var(--text);border-co
 /* ---------- hero ---------- */
 html[data-design="v2"] .hero{
   border-radius:24px;min-height:300px;border:1px solid var(--border);
-  box-shadow:var(--shadow);isolation:isolate;background:#0c0c14;
+  box-shadow:var(--shadow);isolation:isolate;background:#08080e;
 }
 html[data-design="v2"] .hero-bg{filter:brightness(.62) saturate(115%)}
 html[data-design="v2"] .hero::after{
@@ -459,8 +458,8 @@ html[data-design="v2"] .smart-strip{grid-template-columns:repeat(2,1fr);gap:12px
 html[data-design="v2"] .smart-card{
   display:flex;flex-direction:column;gap:2px;padding:15px 16px;border-radius:18px;
   border:1px solid var(--border);
-  background:linear-gradient(150deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
-  box-shadow:0 10px 26px rgba(0,0,0,.22);
+  background:linear-gradient(150deg,rgba(255,255,255,.055),rgba(255,255,255,.015));
+  box-shadow:0 10px 26px rgba(0,0,0,.3);
   transition:transform .2s,border-color .2s,box-shadow .2s;font-size:1rem;
 }
 html[data-design="v2"] .smart-card:hover{transform:translateY(-2px);border-color:rgba(255,47,66,.35);box-shadow:0 16px 34px rgba(0,0,0,.32)}
@@ -492,7 +491,7 @@ html[data-design="v2"] .m-card{
   transition:transform .22s,box-shadow .22s,border-color .22s;
 }
 html[data-design="v2"] .m-card:hover{transform:translateY(-5px);box-shadow:0 18px 38px rgba(0,0,0,.45);border-color:rgba(255,255,255,.18)}
-html[data-design="v2"] .m-card .poster-wrap{aspect-ratio:2/3;background:linear-gradient(160deg,#1a1a26,#0e0e16);overflow:hidden}
+html[data-design="v2"] .m-card .poster-wrap{aspect-ratio:2/3;background:linear-gradient(160deg,#14141d,#0a0a11);overflow:hidden}
 html[data-design="v2"] .m-card .poster{transition:transform .35s}
 html[data-design="v2"] .m-card:hover .poster{transform:scale(1.05)}
 html[data-design="v2"] .m-card .poster-ph{font-size:1.7rem;color:var(--muted)}
@@ -518,7 +517,7 @@ html[data-design="v2"] .tv-card{padding:14px;border-radius:18px;background:var(-
 /* ---------- stats / progress ---------- */
 html[data-design="v2"] .stats-grid{gap:12px;margin-bottom:18px}
 html[data-design="v2"] .stat-card{
-  background:linear-gradient(150deg,rgba(255,255,255,.075),rgba(255,255,255,.02));
+  background:linear-gradient(150deg,rgba(255,255,255,.05),rgba(255,255,255,.015));
   border:1px solid var(--border);border-radius:18px;min-height:98px;padding:16px 12px;
   box-shadow:0 10px 26px rgba(0,0,0,.22);
 }
@@ -1475,7 +1474,26 @@ document.addEventListener('DOMContentLoaded',init);
   function el(id){return document.getElementById(id)}
   function toast(m){try{showToast(m)}catch(e){}}
   function esc(v){try{return escapeHtml(v)}catch(e){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]})}}
-  function syncKeys(){try{return Object.keys(STORAGE).map(function(k){return STORAGE[k]}).filter(function(k){return typeof k==='string'&&k!==META})}catch(e){return []}}
+  /* STORAGE ke bahar wale data keys bhi sync hote hain (TV Garden, channel organizer, tracker prefs).
+     Ye keys app ke pehle script block mein banti hain, isliye yahan literal naam use kiye gaye hain. */
+  var EXTRA_KEYS=[
+    'cineverse_tv_channel_organizer_v1',      /* saved live TV channels, categories, order */
+    'cineverse_tv_garden_favorites_url_v1',   /* TV Garden favorites link */
+    'cineverse_tv_garden_last_view_v1',       /* TV Garden last opened list */
+    'cineverse_tv_org_sort_v1',               /* channel organizer sort */
+    'cv_tracker_prefs_v1',                    /* tracker prefs/filters */
+    'cv_tracker_featured_v1',                 /* tracker featured pick */
+    'cineverse_shuffle_history_v1'            /* surprise-me history */
+  ];
+  function syncKeys(){
+    try{
+      var base=Object.keys(STORAGE).map(function(k){return STORAGE[k]})
+        .filter(function(k){return typeof k==='string'&&k!==META});
+      var out=base.slice();
+      EXTRA_KEYS.forEach(function(k){if(out.indexOf(k)<0)out.push(k)});
+      return out;
+    }catch(e){return EXTRA_KEYS.slice()}
+  }
   function isSyncKey(k){return syncKeys().indexOf(k)>-1}
   function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
   function detail(t){var d=el('cvSyncDetail');if(d)d.textContent=t||''}
@@ -1726,6 +1744,17 @@ document.addEventListener('DOMContentLoaded',init);
     return changed;
   }
 
+  /* Cloud doc purana ho aur usme koi sync key hi na ho (jaise naye TV Garden/organizer keys)
+     to is device ka data cloud par bhej dena chahiye - warna wo sirf is device par reh jaata hai. */
+  function missingInRemote(dataStr){
+    try{
+      var o=JSON.parse(dataStr||'{}');
+      return syncKeys().some(function(k){
+        return typeof o[k]!=='string' && localStorage.getItem(k)!=null;
+      });
+    }catch(e){return false}
+  }
+
   function pullOnce(){
     if(!user)return Promise.resolve('none');
     return withTimeout(docRef().get(),15000,'read').then(function(snap){
@@ -1740,7 +1769,15 @@ document.addEventListener('DOMContentLoaded',init);
       }
       if(rt>lastT){
         var changed=applyRemote(d.data,rt);
+        if(missingInRemote(d.data)){
+          detail('is device ka naya data cloud pe bheja ja raha hai');
+          return pushAll().then(function(pushed){return (changed||pushed)?'pulled':'same'});
+        }
         return changed?'pulled':'same';
+      }
+      if(missingInRemote(d.data)){
+        detail('is device ka naya data cloud pe bheja ja raha hai');
+        return pushAll().then(function(pushed){return pushed?'pushed':'same'});
       }
       ok('already up to date');
       return 'same';
