@@ -1105,6 +1105,54 @@ document.addEventListener('DOMContentLoaded',init);
   function syncKeys(){try{return Object.keys(STORAGE).map(function(k){return STORAGE[k]}).filter(function(k){return typeof k==='string'&&k!==META})}catch(e){return []}}
   function readMeta(){try{return JSON.parse(localStorage.getItem(META)||'{}')||{}}catch(e){return {}}}
   function writeMeta(m){try{localStorage.setItem(META,JSON.stringify(m))}catch(e){}}
+  /* Small IndexedDB store: survives localStorage.clear() done by "Import all data" */
+  function idbOpen(){
+    return new Promise(function(res,rej){
+      try{
+        var r=indexedDB.open('cv_acct',1);
+        r.onupgradeneeded=function(){try{r.result.createObjectStore('kv')}catch(e){}};
+        r.onsuccess=function(){res(r.result)};
+        r.onerror=function(){rej(r.error)};
+      }catch(e){rej(e)}
+    });
+  }
+  function idbGet(k){
+    return idbOpen().then(function(db){
+      return new Promise(function(res){
+        try{
+          var g=db.transaction('kv','readonly').objectStore('kv').get(k);
+          g.onsuccess=function(){res(g.result)};g.onerror=function(){res(null)};
+        }catch(e){res(null)}
+      });
+    }).catch(function(){return null});
+  }
+  function idbSet(k,v){
+    return idbOpen().then(function(db){
+      return new Promise(function(res){
+        try{
+          var tx=db.transaction('kv','readwrite');
+          tx.objectStore('kv').put(v,k);
+          tx.oncomplete=function(){res(true)};tx.onerror=function(){res(false)};
+        }catch(e){res(false)}
+      });
+    }).catch(function(){return false});
+  }
+  function idbDel(k){
+    return idbOpen().then(function(db){
+      return new Promise(function(res){
+        try{
+          var tx=db.transaction('kv','readwrite');
+          tx.objectStore('kv').delete(k);
+          tx.oncomplete=function(){res(true)};tx.onerror=function(){res(false)};
+        }catch(e){res(false)}
+      });
+    }).catch(function(){return false});
+  }
+  function markLocalNewest(){
+    var m=readMeta(),now=Date.now();
+    syncKeys().forEach(function(k){m[k]=now});
+    writeMeta(m);
+  }
   function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
   function msg(t,c){var p=el('cvAuthMsg');if(p){p.textContent=t||'';p.style.color=c||'var(--warn)'}}
 
@@ -1246,8 +1294,18 @@ document.addEventListener('DOMContentLoaded',init);
     render();
     if(user){
       try{localStorage.setItem(HAD,'1')}catch(e){}
+      idbSet('had',1);
       status('Connecting…','var(--warn)');
-      pullThenPush().catch(fail);
+      idbGet('pendingImport').then(function(ts){
+        if(ts&&(Date.now()-Number(ts))<600000){
+          idbDel('pendingImport');
+          markLocalNewest();
+          toast('Imported data cloud pe bheja ja raha hai');
+          return pushAll();
+        }
+        if(ts)idbDel('pendingImport');
+        return pullThenPush();
+      }).catch(fail);
     }else{
       status('Signed out');
     }
@@ -1326,6 +1384,7 @@ document.addEventListener('DOMContentLoaded',init);
     if(!auth)return;
     auth.signOut().then(function(){
       try{localStorage.removeItem(HAD)}catch(e){}
+      idbDel('had');idbDel('pendingImport');
       msg('','');toast('Sign out ho gaya');
     }).catch(function(e){msg(authErr(e),'var(--accent)')});
   };
@@ -1352,11 +1411,33 @@ document.addEventListener('DOMContentLoaded',init);
     render();
     var had=false;
     try{had=localStorage.getItem(HAD)==='1'}catch(e){}
-    if(!had){status('Signed out');return}
-    ensure().catch(function(e){
-      msg('Cloud sync load nahi hui - internet check karein','var(--warn)');
-      try{console.warn('[cloud]',e)}catch(x){}
+    var probe;
+    if(had){
+      probe=Promise.resolve(true);
+    }else{
+      probe=idbGet('had').then(function(v){
+        if(v)return true;
+        if(indexedDB&&indexedDB.databases){
+          return indexedDB.databases().then(function(l){
+            return (l||[]).some(function(d){return d&&d.name==='firebaseLocalStorageDb'});
+          }).catch(function(){return false});
+        }
+        return false;
+      }).catch(function(){return false});
+    }
+    probe.then(function(load){
+      if(!load){status('Signed out');return}
+      ensure().catch(function(e){
+        msg('Cloud sync load nahi hui - internet check karein','var(--warn)');
+        try{console.warn('[cloud]',e)}catch(x){}
+      });
     });
+    var imp=el('importAllDataFile');
+    if(imp){
+      imp.addEventListener('change',function(){
+        idbSet('pendingImport',Date.now());
+      });
+    }
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
