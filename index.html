@@ -690,6 +690,14 @@ html[data-design="v2"] .badge-s{padding:3px 9px}
   html[data-design="v2"] *{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
 </style>
+<style id="toastFix">
+/* Toast fix: pehle toast sirf 100px neeche slide hota tha, isliye uska hissa screen par reh jaata tha.
+   Ab: opacity 0 + visibility hidden + apni height ke hisaab se (140%) neeche, aur taps block nahi karta. */
+.toast{visibility:hidden;opacity:0;pointer-events:none;transform:translateX(-50%) translateY(140%);
+  transition:transform .3s cubic-bezier(.22,.61,.36,1),opacity .3s ease}
+.toast.show{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
+@media(prefers-reduced-motion:reduce){.toast,.toast.show{transition:none}}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">📡 Offline — local tracking works</div>
@@ -1062,7 +1070,7 @@ function escapeHtml(s){if(!s)return'';const d=document.createElement('div');d.te
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,8)}
 function formatRuntime(m){if(!m)return'';const h=Math.floor(m/60),x=m%60;return h?h+'h '+x+'m':m+' min'}
 function yearOf(d){return d?String(d).slice(0,4):''}
-function showToast(msg,ms=2800){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),ms)}
+function showToast(msg,ms=2800){const el=$('toast');if(!el)return;el.textContent=msg;el.style.visibility='visible';el.style.opacity='1';el.classList.add('show');clearTimeout(el._t);clearTimeout(el._t2);el._t=setTimeout(()=>{el.classList.remove('show');el.style.opacity='0';el._t2=setTimeout(()=>{el.style.visibility='hidden'},340)},ms)}
 function confirmDialog(title,msg){return new Promise(resolve=>{const ov=$('confirmModal');$('confirmTitle').textContent=title;$('confirmMsg').textContent=msg;ov.classList.add('show');const ok=$('confirmOk'),cancel=$('confirmCancel');const cleanup=v=>{ov.classList.remove('show');ok.onclick=null;cancel.onclick=null;resolve(v)};ok.onclick=()=>cleanup(true);cancel.onclick=()=>cleanup(false);ov.onclick=e=>{if(e.target===ov)cleanup(false)}})}
 function applyTheme(){if(themePref==='light')document.documentElement.setAttribute('data-theme','light');else document.documentElement.removeAttribute('data-theme');const btn=$('themeToggle');if(btn)btn.textContent=themePref==='light'?'☀️':'🌙';const tg=$('darkToggle');if(tg){tg.classList.toggle('on',themePref!=='light');tg.setAttribute('aria-checked',themePref!=='light')}}
 function toggleTheme(){themePref=themePref==='light'?'dark':'light';localStorage.setItem(STORAGE.theme,themePref);applyTheme();showToast('Theme: '+themePref)}
