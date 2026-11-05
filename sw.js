@@ -1,5 +1,6 @@
 /* CineVerse Ultimate service worker */
-const CACHE = 'cineverse-v1';
+const CACHE = 'cineverse-v2';
+const IMG_CACHE = 'cineverse-v2-img';
 const SHELL = [
   './',
   './index.html',
@@ -22,7 +23,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== IMG_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -32,20 +33,32 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
 
-  // App shell + own assets: cache first, then network
   if (url.origin === self.location.origin) {
-    e.respondWith(
-      caches.match(req, {ignoreSearch: true}).then(hit => {
-        if (hit) return hit;
-        return fetch(req).then(res => {
+    // Page loads: network first so a new version is picked up as soon as it is online,
+    // cache only as the offline fallback.
+    if (req.mode === 'navigate' || (req.destination === 'document')) {
+      e.respondWith(
+        fetch(req).then(res => {
           if (res && res.ok) {
             const copy = res.clone();
             caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
           }
           return res;
-        }).catch(() => {
-          if (req.mode === 'navigate') return caches.match('./index.html');
-        });
+        }).catch(() => caches.match(req, {ignoreSearch: true}).then(hit => hit || caches.match('./index.html')))
+      );
+      return;
+    }
+    // Own assets: serve fast, refresh in the background.
+    e.respondWith(
+      caches.match(req, {ignoreSearch: true}).then(hit => {
+        const net = fetch(req).then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+          }
+          return res;
+        }).catch(() => hit);
+        return hit || net;
       })
     );
     return;
@@ -56,7 +69,7 @@ self.addEventListener('fetch', e => {
     caches.match(req).then(hit => hit || fetch(req).then(res => {
       if (res && (res.ok || res.type === 'opaque')) {
         const copy = res.clone();
-        caches.open(CACHE + '-img').then(c => c.put(req, copy)).catch(() => {});
+        caches.open(IMG_CACHE).then(c => c.put(req, copy)).catch(() => {});
       }
       return res;
     }).catch(() => hit))
