@@ -579,6 +579,8 @@ Pathaan"></textarea>
 <button class="btn btn-secondary btn-sm" onclick="cvSignIn()">Sign in</button>
 </div>
 <button class="btn btn-outline btn-sm btn-block" style="margin-top:8px" onclick="cvGoogle()">🔵 Continue with Google</button>
+<p style="font-size:.72rem;color:var(--muted);margin-top:8px;line-height:1.4">Note: yeh aapka Gmail password nahi hai — CineVerse ka apna password hota hai jo sign up ke waqt set hota hai.</p>
+<button class="btn btn-ghost btn-sm btn-block" style="margin-top:6px" onclick="cvForgotPassword()">Forgot password?</button>
 <p id="cvAuthMsg" style="font-size:.78rem;color:var(--warn);line-height:1.4;margin-top:8px"></p>
 </div>
 <div id="cvSignedIn" style="display:none">
@@ -586,6 +588,11 @@ Pathaan"></textarea>
 <div class="setting-row"><span>Status</span><span id="cvAcctStatus" style="font-size:.8rem;color:var(--muted)">—</span></div>
 <div class="setting-row"><span>Last sync</span><span id="cvLastSync" style="font-size:.8rem;color:var(--muted)">—</span></div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="btn btn-primary btn-sm" onclick="cvSyncNow()">🔄 Sync now</button><button class="btn btn-ghost btn-sm" onclick="cvSignOut()">Sign out</button></div>
+<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+<p style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Email/password se bhi sign in karna hai? Yahan password set kariye — dono tareeke ek hi account aur ek hi data par chalenge.</p>
+<input id="cvPass2" type="password" autocomplete="new-password" placeholder="Naya password (kam se kam 6 characters)" style="width:100%;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:8px"/>
+<button class="btn btn-secondary btn-sm btn-block" onclick="cvSetPassword()">🔑 Set / change password</button>
+</div>
 </div>
 </div>
 
@@ -1116,7 +1123,12 @@ document.addEventListener('DOMContentLoaded',init);
       'auth/popup-closed-by-user':'Sign-in popup band ho gaya.',
       'auth/popup-blocked':'Popup block ho gaya - dobara koshish karein.',
       'auth/network-request-failed':'Network issue - internet check karein.',
-      'auth/too-many-requests':'Bahut zyada koshish - thodi der baad try karein.'
+      'auth/too-many-requests':'Bahut zyada koshish - thodi der baad try karein.',
+      'auth/user-not-found':'Is email ka koi email/password account nahi hai. Pehle sign up karein, ya Google se sign in karein.',
+      'auth/requires-recent-login':'Session purana ho gaya hai - sign out karke dobara sign in karein, phir try karein.',
+      'auth/provider-already-linked':'Is account pe password pehle se set hai - naya password daal ke "Set / change password" dabaiye.',
+      'auth/credential-already-in-use':'Is email pe pehle se alag email/password account hai.',
+      'auth/missing-email':'Email daaliye.'
     };
     return map[c]||(e&&e.message)||'Kuch galat ho gaya';
   }
@@ -1272,6 +1284,42 @@ document.addEventListener('DOMContentLoaded',init);
         throw e;
       });
     }).then(function(){msg('','')}).catch(function(e){msg(authErr(e),'var(--accent)')});
+  };
+
+  window.cvForgotPassword=function(){
+    var em=(el('cvEmail')&&el('cvEmail').value||'').trim();
+    if(!em)return msg('Pehle apna email daaliye, phir "Forgot password?" dabaiye');
+    msg('Reset link bheja ja raha hai…','var(--muted)');
+    ensure().then(function(){return auth.sendPasswordResetEmail(em)})
+      .then(function(){msg('Reset link '+em+' pe bhej diya - mail kholiye aur naya password set kariye','var(--ok)');toast('Reset email bheja gaya')})
+      .catch(function(e){msg(authErr(e),'var(--accent)')});
+  };
+
+  window.cvSetPassword=function(){
+    var pw=(el('cvPass2')&&el('cvPass2').value)||'';
+    if(!user)return msg('Pehle sign in karein');
+    if(!pw||pw.length<6)return msg('Password kam se kam 6 characters ka daaliye','var(--accent)');
+    if(!user.email)return msg('Is account ka email nahi hai','var(--accent)');
+    msg('Password set ho raha hai…','var(--muted)');
+    var cred=firebase.auth.EmailAuthProvider.credential(user.email,pw);
+    user.linkWithCredential(cred).then(function(){
+      msg('Password set ✓ - ab email/password se bhi sign in kar sakte hain, data wahi rahega','var(--ok)');
+      toast('Password set ho gaya');
+      if(el('cvPass2'))el('cvPass2').value='';
+    }).catch(function(e){
+      var c=(e&&e.code)||'';
+      if(c==='auth/provider-already-linked'){
+        return user.updatePassword(pw).then(function(){
+          msg('Password update ✓','var(--ok)');toast('Password update ho gaya');
+          if(el('cvPass2'))el('cvPass2').value='';
+        }).catch(function(e2){msg(authErr(e2),'var(--accent)')});
+      }
+      if(c==='auth/email-already-in-use'||c==='auth/credential-already-in-use'){
+        msg('Is email pe pehle se ek alag email/password account hai (alag data ke saath). Uska password "Forgot password?" se reset kariye, ya Google se hi sign in karte rahiye.','var(--accent)');
+        return;
+      }
+      msg(authErr(e),'var(--accent)');
+    });
   };
 
   window.cvSignOut=function(){
