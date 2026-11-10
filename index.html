@@ -770,6 +770,81 @@ body.ct-sel-open #page-tracker{padding-bottom:96px}
 .cv-rem b{display:block;font-size:.82rem;line-height:1.25;margin-bottom:3px}
 .cv-rem span{font-size:.7rem;color:var(--muted)}
 </style>
+<style id="premium">
+/* ===== Premium polish (sirf naye design v2 par) ===== */
+html[data-design="v2"]{--gold:#f2c777;--gold-soft:rgba(242,199,119,.14)}
+html[data-design="v2"] body{background-blend-mode:normal}
+html[data-design="v2"] .hero{
+  border-radius:26px;
+  box-shadow:0 26px 60px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.06);
+  border-color:rgba(255,255,255,.1);
+}
+html[data-design="v2"] .hero::after{
+  background:linear-gradient(180deg,rgba(5,5,10,.05) 0%,rgba(5,5,10,.45) 45%,rgba(5,5,10,.97) 100%);
+}
+html[data-design="v2"] .hero-title{
+  font-family:Georgia,'Times New Roman',serif;font-weight:600;letter-spacing:-.01em;
+  text-shadow:0 4px 24px rgba(0,0,0,.7);
+}
+html[data-design="v2"] .hero-meta span{
+  background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);
+  backdrop-filter:blur(10px);letter-spacing:.01em;
+}
+html[data-design="v2"] .hero-actions .btn-primary{
+  background:linear-gradient(135deg,#ff3a48,#ff6a3d);
+  box-shadow:0 12px 30px rgba(255,47,66,.42);
+}
+html[data-design="v2"] .section-title{letter-spacing:-.015em}
+html[data-design="v2"] .section-title::before{
+  background:linear-gradient(180deg,var(--gold),var(--accent));
+  box-shadow:0 0 12px rgba(242,199,119,.35);
+}
+html[data-design="v2"] .m-card{
+  box-shadow:0 14px 34px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);
+  border-color:rgba(255,255,255,.075);
+}
+html[data-design="v2"] .m-card:hover{
+  box-shadow:0 24px 50px rgba(0,0,0,.6),0 0 0 1px rgba(242,199,119,.22);
+  border-color:rgba(242,199,119,.3);
+}
+html[data-design="v2"] .m-card .meta .rate{color:var(--gold);font-weight:700;letter-spacing:.01em}
+html[data-design="v2"] .m-card .info{padding:10px 11px 12px}
+html[data-design="v2"] .m-card .title{font-size:.8rem;line-height:1.3}
+html[data-design="v2"] .stat-card,html[data-design="v2"] .cv-insight,html[data-design="v2"] .cv-card{
+  box-shadow:0 12px 30px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.04);
+}
+html[data-design="v2"] .cv-insight .v{letter-spacing:-.035em}
+html[data-design="v2"] .smart-card{
+  box-shadow:0 12px 30px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.05);
+}
+html[data-design="v2"] .smart-card:hover{border-color:rgba(242,199,119,.35);box-shadow:0 18px 38px rgba(0,0,0,.4),0 0 0 1px rgba(242,199,119,.18)}
+html[data-design="v2"] .list-card{border-color:rgba(255,255,255,.075)}
+html[data-design="v2"] .ct-card{border-color:rgba(255,255,255,.075)}
+html[data-design="v2"] .ct-rate{color:var(--gold);background:rgba(0,0,0,.55);backdrop-filter:blur(6px);border-radius:8px;padding:2px 7px}
+html[data-design="v2"] .bottom-nav .nav-item.active::after{background:var(--gold);box-shadow:0 0 12px rgba(242,199,119,.6)}
+html[data-design="v2"] .sidebar .nav-item.active{
+  background:linear-gradient(100deg,rgba(242,199,119,.16),rgba(255,47,66,.06));
+  box-shadow:inset 0 0 0 1px rgba(242,199,119,.24);
+}
+html[data-design="v2"] .chip.active{
+  background:linear-gradient(135deg,var(--accent),#ff6a3d);
+  box-shadow:0 10px 24px rgba(255,47,66,.34);
+}
+html[data-design="v2"] .btn-primary{
+  background:linear-gradient(135deg,#ff2f42,#ff6a3d);
+  box-shadow:0 12px 28px rgba(255,47,66,.34),inset 0 1px 0 rgba(255,255,255,.14);
+}
+html[data-design="v2"] .btn-primary:hover{box-shadow:0 16px 34px rgba(255,47,66,.44),inset 0 1px 0 rgba(255,255,255,.18)}
+html[data-design="v2"] .app-header{border-bottom:1px solid rgba(255,255,255,.07)}
+html[data-design="v2"] .cv-rem{border-color:rgba(255,255,255,.075);box-shadow:0 10px 26px rgba(0,0,0,.3)}
+html[data-design="v2"] .cv-rem:hover{border-color:rgba(242,199,119,.35);box-shadow:0 14px 32px rgba(0,0,0,.42)}
+html[data-design="v2"] .cv-donut{box-shadow:0 10px 30px rgba(0,0,0,.4)}
+html[data-design="v2"] .progress-fill{box-shadow:0 0 20px rgba(47,214,123,.5)}
+@media(min-width:768px){
+  html[data-design="v2"] .hero{border-radius:28px}
+  html[data-design="v2"] .hero-title{font-size:2.7rem}
+}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">📡 Offline — local tracking works</div>
@@ -1059,6 +1134,10 @@ Pathaan"></textarea>
 </div>
 </div>
 
+<div class="settings-group"><h4>↩️ Purana version</h4>
+<div class="setting-row"><span>Pehla CineVerse (design se pehle)</span><button class="btn btn-ghost btn-sm" onclick="cvOpenOldVersion()">↗ Kholo</button></div>
+<p style="font-size:.75rem;color:var(--muted);line-height:1.45;margin-top:8px">Ye purani HTML file alag page par khulti hai — bilkul waise hi jaise purani file chala rahe hon. Aapka data (tracker, channels, cloud sync) same rehta hai. Wapas naye version ke liye normal app link khol lein.</p>
+</div>
 <div class="settings-group"><h4>Appearance</h4>
 <div class="setting-row"><span>Dark Mode</span><div class="toggle on" id="darkToggle" role="switch" tabindex="0"></div></div>
 <div class="setting-row"><span>Naya design (v2)</span><div class="toggle on" id="designToggle" role="switch" tabindex="0" aria-checked="true" aria-label="Naya design"></div></div>
@@ -1169,6 +1248,17 @@ function cvMarkBackup(){try{localStorage.setItem(BACKUP_KEY,String(Date.now()));
 function cvBackupDue(){const t=cvLastBackup();return !t||(Date.now()-t)>BACKUP_DAYS*86400000}
 function cvBackupNudgeShouldShow(){if(!cvBackupDue())return false;try{const sn=+localStorage.getItem(BACKUP_SNOOZE)||0;return !(sn&&Date.now()-sn<SNOOZE_DAYS*86400000)}catch(e){return true}}
 function cvRelTime(ts){if(!ts)return 'kabhi nahi';const d=Date.now()-ts,day=86400000;if(d<60000)return 'abhi abhi';if(d<3600000)return Math.round(d/60000)+' min pehle';if(d<day)return Math.round(d/3600000)+' ghante pehle';if(d<30*day)return Math.round(d/day)+' din pehle';return new Date(ts).toLocaleDateString()}
+function cvOpenOldVersion(){
+  try{
+    if(!confirmDialog)throw 0;
+  }catch(e){}
+  try{
+    const go=()=>{window.location.href='v-original.html'};
+    if(typeof confirmDialog==='function'){
+      confirmDialog('Purana version kholein?','App purani HTML file par chali jaayegi (naye features nahi milenge). Data same rahega, par purana version naye fields (jaise release date) save nahi karega.').then(ok=>{if(ok)go()});
+    }else go();
+  }catch(e){window.location.href='v-original.html'}
+}
 function cvBackupNow(){try{exportAllData()}catch(e){try{showToast('Backup fail hua',3000)}catch(x){}}}
 function cvSnoozeBackup(){try{localStorage.setItem(BACKUP_SNOOZE,String(Date.now()))}catch(e){}try{cvRenderSafety();showToast('Theek hai — 3 din baad phir yaad dila dunga',2600)}catch(e){}}
 function cvAskCacheCount(){try{if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'cv-cache-count'})}catch(e){}}
@@ -1252,7 +1342,7 @@ async function syncLiveMovies(){if(!apiKey){
   return
 }const st=$('apiStatus');if(st){st.textContent='🔄 Syncing…';st.style.color='var(--ok)'}showToast('🔄 Syncing…',4000);try{const results=[];const pull=async(path,params)=>{try{const d=await tmdbFetch(path,params);if(d?.results)results.push(...d.results)}catch(e){}};for(let p=1;p<=3;p++)await pull('/discover/movie',{with_original_language:'hi',region:'IN',sort_by:'popularity.desc',page:p,include_adult:'false'});await pull('/movie/now_playing',{region:'IN',page:1});await pull('/movie/upcoming',{region:'IN',page:1});if(!results.length)throw new Error('0 results');const byId=new Map();results.forEach(x=>{if(x?.id)byId.set(x.id,x)});const incoming=[...byId.values()].map(mapTmdbMovie);const liveTitles=new Set(incoming.map(m=>(m.title||'').toLowerCase()));const keep=DEMO_MOVIES.filter(d=>!liveTitles.has((d.title||'').toLowerCase()));catalog=[...incoming,...keep];catalog.sort((a,b)=>(b.popularity||0)-(a.popularity||0));localStorage.setItem(STORAGE.liveMovies,JSON.stringify(catalog));showToast('✅ '+incoming.length+' movies loaded');if(st)st.textContent='✅ '+incoming.length+' movies (total '+catalog.length+')';if(currentPage==='home')renderHome();if(currentPage==='movies')renderAllMovies();if(currentPage==='bollywood')renderBollywood()}catch(e){showToast('❌ '+ (e.message||e));if(st){st.textContent='❌ '+(e.message||e);st.style.color='var(--warn)'}}}
 function nav(page){currentPage=page;$$('.page').forEach(p=>p.classList.remove('active'));const el=$('page-'+page);if(el)el.classList.add('active');$$('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===page));window.scrollTo(0,0);const map={home:renderHome,search:()=>{},movies:renderAllMovies,bollywood:renderBollywood,free:renderFree,upcoming:renderUpcoming,tv:renderTV,actors:renderActors,watchlist:renderWatchlist,favorites:renderFavorites,tracker:renderTracker,calendar:renderCalendar,timeline:renderTimeline,profile:renderProfile,settings:renderSettings};if(map[page])map[page]()}
-function createMovieCard(m){const lib=getLibEntry(m.id)||getLibEntry(m.tmdbId);const poster=m.poster?`<img class="poster" src="${escapeHtml(m.poster)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=poster-ph>🎬</div>'"/>`:'<div class="poster-ph">🎬</div>';let badges='';if(m.isFree)badges+='<span class="badge free">FREE</span>';if(lib?.watched)badges+='<span class="badge watched">✓</span>';const rating=m.rating?'★ '+m.rating:'';const year=m.year||yearOf(m.releaseDate)||'';return`<div class="m-card" data-id="${escapeHtml(String(m.id))}"><div class="poster-wrap">${poster}${badges}</div><div class="info"><div class="title">${escapeHtml(m.title)}</div><div class="meta"><span>${year}</span>${rating?`<span>${rating}</span>`:''}</div></div></div>`}
+function createMovieCard(m){const lib=getLibEntry(m.id)||getLibEntry(m.tmdbId);const poster=m.poster?`<img class="poster" src="${escapeHtml(m.poster)}" alt="" loading="lazy" onerror="this.parentElement.innerHTML='<div class=poster-ph>🎬</div>'"/>`:'<div class="poster-ph">🎬</div>';let badges='';if(m.isFree)badges+='<span class="badge free">FREE</span>';if(lib?.watched)badges+='<span class="badge watched">✓</span>';const rating=m.rating?'★ '+m.rating:'';const year=m.year||yearOf(m.releaseDate)||'';return`<div class="m-card" data-id="${escapeHtml(String(m.id))}"><div class="poster-wrap">${poster}${badges}</div><div class="info"><div class="title">${escapeHtml(m.title)}</div><div class="meta"><span>${year}</span>${rating?`<span class="rate">${rating}</span>`:''}</div></div></div>`}
 function bindCardEvents(container){if(!container)return;container.querySelectorAll('.m-card').forEach(card=>{card.addEventListener('click',()=>openMovieModal(card.dataset.id))})}
 
 function renderHome(){const featured=catalog.filter(m=>m.backdrop||m.poster).sort((a,b)=>(b.popularity||0)-(a.popularity||0))[0]||catalog[0];const hero=$('heroSection');if(featured&&hero){const bg=featured.backdrop||featured.poster||'';hero.innerHTML=`<div class="hero-bg" style="background-image:url('${escapeHtml(bg)}')"></div><div class="hero-content"><div class="hero-title">${escapeHtml(featured.title)}</div><div class="hero-meta">${featured.year?`<span>${featured.year}</span>`:''}${featured.rating?`<span>★ ${featured.rating}</span>`:''}${(featured.genres||[]).slice(0,3).map(g=>`<span>${escapeHtml(g)}</span>`).join('')}</div><div class="hero-desc">${escapeHtml(featured.description||'')}</div><div class="hero-actions"><button class="btn btn-primary" onclick="openMovieModal('${escapeHtml(String(featured.id))}')">▶ Details</button><button class="btn btn-secondary" onclick="toggleWatchlistFromHome('${escapeHtml(String(featured.id))}')">+ Watchlist</button></div></div>`}
