@@ -1,6 +1,6 @@
 /* CineVerse Ultimate service worker */
-const CACHE = 'cineverse-v17';
-const IMG_CACHE = 'cineverse-v17-img';
+const CACHE = 'cineverse-v18';
+const IMG_CACHE = 'cineverse-v18-img';
 const IMG_LIMIT = 260; /* posters ka cap - phone storage bharna band */
 const SHELL = [
   './',
@@ -99,5 +99,16 @@ self.addEventListener('fetch', e => {
       }
       return res;
     }).catch(() => hit))
+  );
+});
+
+/* Notification par tap -> app kholo/focus karo */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) { if ('focus' in c) return c.focus(); }
+      if (self.clients.openWindow) return self.clients.openWindow('./');
+    })
   );
 });
