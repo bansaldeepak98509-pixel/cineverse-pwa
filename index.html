@@ -1647,6 +1647,54 @@ document.addEventListener('DOMContentLoaded',init);
     }catch(e){return EXTRA_KEYS.slice()}
   }
   function isSyncKey(k){return syncKeys().indexOf(k)>-1}
+
+  /* ---------- per-key merge (do device ka data ek doosre ko mita na de) ---------- */
+  var KEY_TS='cv_key_ts_v1';   /* device-local: kis key ko kab badla gaya */
+  function keyTs(){try{var o=JSON.parse(localStorage.getItem(KEY_TS)||'{}');return (o&&typeof o==='object')?o:{}}catch(e){return {}}}
+  function setKeyTs(o){try{_rawSet(KEY_TS,JSON.stringify(o))}catch(e){}}
+  function stampKey(k,t){try{var m=keyTs();m[k]=t||Date.now();setKeyTs(m)}catch(e){}}
+  function initKeyTs(){
+    try{
+      var has=false;
+      try{has=localStorage.getItem(KEY_TS)!=null}catch(e){}
+      if(has)return;
+      var m={},now=Date.now();
+      syncKeys().forEach(function(k){if(localStorage.getItem(k)!=null)m[k]=now});
+      setKeyTs(m);
+    }catch(e){}
+  }
+  /* Har key alag-alag decide hoti hai: jis device ne baad mein badla, wahi jeeta.
+     Cloud doc purana ho (ts field ke bina) to uske t ko sab keys ka time maan lete hain. */
+  function mergeRemote(dataStr,remoteTs,remoteT){
+    var remoteObj=null;
+    try{remoteObj=JSON.parse(dataStr||'{}')}catch(e){remoteObj=null}
+    if(!remoteObj||typeof remoteObj!=='object')throw new Error('cloud data kharab hai');
+    var rts=(remoteTs&&typeof remoteTs==='object')?remoteTs:{};
+    var rt0=+remoteT||0;
+    var lts=keyTs(),now=Date.now();
+    var res={changed:false,pushNeeded:false,fromRemote:0,keptLocal:0};
+    var all=syncKeys().slice();
+    Object.keys(rts).forEach(function(k){if(all.indexOf(k)<0)all.push(k)});
+    all.forEach(function(k){
+      var lv=localStorage.getItem(k);
+      var rv=(typeof remoteObj[k]==='string')?remoteObj[k]:null;
+      var lt=+lts[k]||0;
+      var rt=+rts[k]||(rv!=null?rt0:0);
+      if(rv==null&&lv==null){if(rt>lt)lts[k]=rt;return}
+      if(lv==null&&rv!=null){
+        /* local par nahi hai: agar local ne hi baad mein delete kiya tha to wapas na lao */
+        if(lt>rt){res.pushNeeded=true;return}
+        _rawSet(k,rv);lts[k]=rt;res.changed=true;res.fromRemote++;return
+      }
+      if(rv==null){res.pushNeeded=true;if(!lt)lts[k]=now;return}
+      if(lt>rt){res.pushNeeded=true;res.keptLocal++;return}
+      if(rt>lt){if(lv!==rv){_rawSet(k,rv);res.changed=true;res.fromRemote++}lts[k]=rt;return}
+      if(lv!==rv){res.pushNeeded=true;lts[k]=now}  /* barabar time par local jeetta hai - ping-pong nahi */
+    });
+    setKeyTs(lts);
+    return res;
+  }
+  try{initKeyTs()}catch(e){}
   function status(t,c){var b=el('cvAcctStatus');if(b){b.textContent=t;b.style.color=c||'var(--muted)'}}
   function detail(t){var d=el('cvSyncDetail');if(d)d.textContent=t||''}
   function msg(t,c){['cvAuthMsg','cvSyncMsg'].forEach(function(id){var p=el(id);if(p){p.textContent=t||'';p.style.color=c||'var(--warn)'}})}
@@ -1814,8 +1862,14 @@ document.addEventListener('DOMContentLoaded',init);
     if(!user)return Promise.resolve(false);
     if(busy)return Promise.resolve(false);
     busy=true;status('Syncing…','var(--warn)');detail('uploading…');
-    var now=Date.now(),payload;
-    try{payload=JSON.stringify(snapshotLocal())}catch(e){busy=false;fail(e);return Promise.resolve(false)}
+    var now=Date.now(),payload,tsmap;
+    try{
+      payload=JSON.stringify(snapshotLocal());
+      tsmap=keyTs();
+      if(force)syncKeys().forEach(function(k){tsmap[k]=now});
+      syncKeys().forEach(function(k){if(!tsmap[k])tsmap[k]=now});
+      setKeyTs(tsmap);
+    }catch(e){busy=false;fail(e);return Promise.resolve(false)}
     var guardMsg='';
     return withTimeout(docRef().get(),15000,'read')
       .catch(function(){return null})
@@ -1832,7 +1886,7 @@ document.addEventListener('DOMContentLoaded',init);
             guardMsg='Aapka data achanak kam ho gaya hai ('+countItems(prev.data)+' -> '+countItems(payload)+' items), isliye cloud pe bheja nahi gaya. Purana version cloud pe safe hai - "Purana data restore" dabaiye. Sab jaan-boojh kar clear kiya tha to "Cloud pe bhejo" dabaiye.';
             return false;
           }
-          return withTimeout(docRef().set({data:payload,t:now,email:user.email||'',device:String(navigator.userAgent||'').slice(0,120)}),25000,'write').then(function(){return true});
+          return withTimeout(docRef().set({data:payload,ts:tsmap,t:now,email:user.email||'',device:String(navigator.userAgent||'').slice(0,120)}),25000,'write').then(function(){return true});
         });
       })
       .then(function(done){
@@ -1884,28 +1938,23 @@ document.addEventListener('DOMContentLoaded',init);
       }).catch(function(){});
   }
 
-  function applyRemote(dataStr,remoteT){
+  function applyRemote(dataStr,remoteT,remoteTs){
     var obj=null;
     try{obj=JSON.parse(dataStr||'{}')}catch(e){obj=null}
     if(!obj||typeof obj!=='object')throw new Error('cloud data kharab hai');
     var changed=false;
+    var lts=keyTs(),fallback=+remoteT||Date.now(),rts=(remoteTs&&typeof remoteTs==='object')?remoteTs:{};
     syncKeys().forEach(function(k){
-      if(typeof obj[k]==='string'&&localStorage.getItem(k)!==obj[k]){_rawSet(k,obj[k]);changed=true}
+      if(typeof obj[k]==='string'){
+        if(localStorage.getItem(k)!==obj[k]){_rawSet(k,obj[k]);changed=true}
+        lts[k]=+rts[k]||fallback;
+      }
     });
+    setKeyTs(lts);
     dirty=false;dirtyAt=0;lastT=remoteT||Date.now();saveState();
     return changed;
   }
 
-  /* Cloud doc purana ho aur usme koi sync key hi na ho (jaise naye TV Garden/organizer keys)
-     to is device ka data cloud par bhej dena chahiye - warna wo sirf is device par reh jaata hai. */
-  function missingInRemote(dataStr){
-    try{
-      var o=JSON.parse(dataStr||'{}');
-      return syncKeys().some(function(k){
-        return typeof o[k]!=='string' && localStorage.getItem(k)!=null;
-      });
-    }catch(e){return false}
-  }
 
   function pullOnce(){
     if(!user)return Promise.resolve('none');
@@ -1914,25 +1963,19 @@ document.addEventListener('DOMContentLoaded',init);
         detail('cloud khali hai - upload kar rahe hain');
         return pushAll().then(function(){return 'pushed'});
       }
-      var d=snap.data()||{},rt=+d.t||0;
-      if(dirty&&dirtyAt>rt){
-        detail('is device ka data naya hai - upload');
-        return pushAll().then(function(){return 'pushed'});
-      }
-      if(rt>lastT){
-        var changed=applyRemote(d.data,rt);
-        if(missingInRemote(d.data)){
-          detail('is device ka naya data cloud pe bheja ja raha hai');
-          return pushAll().then(function(pushed){return (changed||pushed)?'pulled':'same'});
-        }
-        return changed?'pulled':'same';
-      }
-      if(missingInRemote(d.data)){
+      var d=snap.data()||{};
+      var m=mergeRemote(d.data,d.ts,+d.t||0);
+      var chain=Promise.resolve(false);
+      if(m.pushNeeded){
         detail('is device ka naya data cloud pe bheja ja raha hai');
-        return pushAll().then(function(pushed){return pushed?'pushed':'same'});
+        chain=pushAll();
       }
-      ok('already up to date');
-      return 'same';
+      return chain.then(function(){
+        if(m.changed){dirty=false;dirtyAt=0;saveState();detail('cloud se '+m.fromRemote+' keys update hui');return 'pulled'}
+        if(m.pushNeeded)return 'pushed';
+        lastT=+d.t||0;saveState();ok('already up to date');
+        return 'same';
+      });
     });
   }
 
@@ -2071,7 +2114,7 @@ document.addEventListener('DOMContentLoaded',init);
           return;
         }
         var d=snap.data()||{};
-        var changed=applyRemote(d.data,+d.t||0);
+        var changed=applyRemote(d.data,+d.t||0,d.ts);
         if(!changed){ok('cloud data pehle se is device pe hai');return}
         try{sessionStorage.setItem(BACK,'1')}catch(e){}
         status('Downloaded','var(--ok)');
@@ -2101,7 +2144,7 @@ document.addEventListener('DOMContentLoaded',init);
         };
         return Promise.resolve(ask()).then(function(yes){
           if(!yes){status('Synced','var(--ok)');return}
-          var changed=applyRemote(pick.data,pick.t);
+          var changed=applyRemote(pick.data,pick.t,pick.ts);
           try{sessionStorage.setItem(BACK,'1')}catch(e){}
           status('Downloaded','var(--ok)');
           toast('Purana data restore ho gaya - app refresh ho raha hai');
@@ -2118,12 +2161,24 @@ document.addEventListener('DOMContentLoaded',init);
     }).catch(fail);
   };
 
+  /* delete bhi ek change hai - warna merge purani value wapas le aata */
+  localStorage.removeItem=function(k){
+    try{_rawRemove(k)}catch(e){}
+    try{
+      if(isSyncKey(k)){
+        stampKey(k,Date.now());
+        dirty=true;dirtyAt=Date.now();saveState();
+        if(user&&!busy){clearTimeout(timer);timer=setTimeout(function(){pushAll()},5000)}
+      }
+    }catch(e){}
+  };
+
   /* ---------- track local edits (imports go through setItem too) ---------- */
   localStorage.setItem=function(k,v){
     _rawSet(k,v);
     try{
       if(isSyncKey(k)){
-        dirty=true;dirtyAt=Date.now();saveState();
+        dirty=true;dirtyAt=Date.now();stampKey(k,dirtyAt);saveState();
         if(user&&!busy){clearTimeout(timer);timer=setTimeout(function(){pushAll()},5000)}
       }
     }catch(e){}
