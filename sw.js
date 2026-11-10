@@ -1,6 +1,6 @@
 /* CineVerse Ultimate service worker */
-const CACHE = 'cineverse-v19';
-const IMG_CACHE = 'cineverse-v19-img';
+const CACHE = 'cineverse-v20';
+const IMG_CACHE = 'cineverse-v20-img';
 const IMG_LIMIT = 260; /* posters ka cap - phone storage bharna band */
 const SHELL = [
   './',
