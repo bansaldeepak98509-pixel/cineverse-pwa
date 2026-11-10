@@ -726,6 +726,39 @@ body.ct-sel-open #page-tracker{padding-bottom:96px}
 .ct-selbar .btn{padding:7px 11px;font-size:.76rem;border-radius:10px}
 @media(min-width:768px){.ct-selbar{left:236px;bottom:0}}
 </style>
+<style id="statsV2">
+.cv-insight-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:4px 0 16px}
+.cv-insight{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px 16px;min-width:0}
+.cv-insight .k{font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-insight .v{font-size:1.55rem;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin-top:3px;line-height:1.1}
+.cv-insight .s{font-size:.71rem;color:var(--text2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cv-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:14px 16px;margin-bottom:16px}
+.cv-empty{color:var(--muted);font-size:.82rem;line-height:1.45;margin:6px 2px}
+.cv-bars{display:flex;align-items:flex-end;gap:5px;padding-top:4px}
+.cv-bar{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px}
+.cv-bar b{font-size:.6rem;color:var(--text2);font-weight:700;height:12px;line-height:1}
+.cv-bt{width:100%;height:86px;display:flex;align-items:flex-end}
+.cv-bt i{display:block;width:100%;border-radius:5px 5px 2px 2px;min-height:3px;
+  background:linear-gradient(180deg,var(--accent),rgba(255,47,66,.28));transition:height .3s}
+.cv-bar span{font-size:.58rem;color:var(--muted);white-space:nowrap}
+.cv-bar.zero .cv-bt i{background:rgba(255,255,255,.1)}
+.cv-donut-wrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.cv-donut{width:124px;height:124px;border-radius:50%;position:relative;flex-shrink:0}
+.cv-donut::after{content:'';position:absolute;inset:24px;border-radius:50%;background:var(--bg2)}
+.cv-donut .cv-dc{position:absolute;inset:0;display:grid;place-items:center;z-index:2;text-align:center}
+.cv-donut .cv-dc b{display:block;font-size:1.3rem;font-weight:800;letter-spacing:-.03em;line-height:1}
+.cv-donut .cv-dc small{display:block;font-size:.52rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:1px}
+.cv-legend{display:flex;flex-direction:column;gap:7px;font-size:.78rem;flex:1;min-width:140px}
+.cv-legend .row{display:flex;align-items:center;gap:7px}
+.cv-legend .row i{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.cv-legend .row span{color:var(--text2)}
+.cv-legend .row b{margin-left:auto;font-variant-numeric:tabular-nums}
+.cv-split{font-size:.75rem;color:var(--muted);margin-top:10px}
+.cv-rating{display:flex;align-items:flex-end;gap:5px}
+.cv-rating .cv-bar b{font-size:.58rem}
+@media(min-width:768px){.cv-insight-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:380px){.cv-insight .v{font-size:1.35rem}}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">📡 Offline — local tracking works</div>
@@ -964,15 +997,23 @@ Pathaan"></textarea>
 </main>
 <main id="page-profile" class="page">
 <h2 class="section-title">📊 Profile & Stats</h2>
-<div class="stats-grid" id="profileStats"></div>
+<div class="stats-grid" id="profileStats" style="display:none"></div>
 <div class="progress-section">
 <div class="progress-header"><span>Overall Progress</span><span id="profileProgressLabel">0%</span></div>
 <div class="progress-track"><div class="progress-fill" id="profileProgressBar"></div></div>
 </div>
+<div class="cv-insight-grid" id="cvInsightGrid"></div>
+<h3 class="section-title" style="font-size:1rem">📈 Last 12 Months</h3>
+<div class="cv-card" id="cvMonthChart"></div>
+<h3 class="section-title" style="font-size:1rem">🏷️ Status</h3>
+<div class="cv-card" id="cvStatusDonut"></div>
+<h3 class="section-title" style="font-size:1rem">🎭 Top Genres</h3>
+<div class="cv-card" id="cvGenreChart"></div>
+<h3 class="section-title" style="font-size:1rem">⭐ My Ratings</h3>
+<div class="cv-card" id="cvRatingChart"></div>
 <h3 class="section-title" style="font-size:1rem">📅 By Year</h3>
 <div id="yearChart" style="padding:0 4px 16px"></div>
-<h3 class="section-title" style="font-size:1rem">🏷️ Status</h3>
-<div id="statusChart" style="padding:0 4px 16px"></div>
+<div id="statusChart" style="display:none"></div>
 </main>
 <main id="page-settings" class="page">
 <h2 class="section-title">⚙️ Settings</h2>
@@ -1261,7 +1302,99 @@ function renderCalendar(){const el=$('calendarView');const items=[];library.filt
 
 function renderTimeline(){$('totalMoviesCount').textContent=catalog.length;const years=[...new Set(catalog.map(m=>m.year).filter(Boolean))].sort((a,b)=>b-a);const ys=$('yearSelector');ys.innerHTML=`<button class="year-btn active" data-y="all">All</button>`+years.slice(0,25).map(y=>`<button class="year-btn" data-y="${y}">${y}</button>`).join('');const show=y=>{let list=y==='all'?catalog:catalog.filter(m=>m.year===+y);list=list.sort((a,b)=>(b.year||0)-(a.year||0)||(b.rating||0)-(a.rating||0));const grid=$('timelineGrid');grid.innerHTML=list.slice(0,60).map(createMovieCard).join('');bindCardEvents(grid)};ys.querySelectorAll('.year-btn').forEach(btn=>{btn.onclick=()=>{ys.querySelectorAll('.year-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');show(btn.dataset.y)}});show('all')}
 
-function renderProfile(){const watched=library.filter(m=>m.watched).length+trackerMovies.filter(m=>m.watched).length;const total=library.length+trackerMovies.length;const fav=library.filter(m=>m.favorite).length+trackerMovies.filter(m=>m.favorite).length;const wl=library.filter(m=>m.inWatchlist).length;const rated=library.filter(m=>m.myRating>0);const avg=rated.length?(rated.reduce((s,m)=>s+m.myRating,0)/rated.length).toFixed(1):'—';const pct=total?Math.round(watched/total*100):0;$('profileStats').innerHTML=`<div class="stat-card"><div class="val">${total}</div><div class="lbl">Tracked</div></div><div class="stat-card"><div class="val" style="color:var(--ok)">${watched}</div><div class="lbl">Watched</div></div><div class="stat-card"><div class="val" style="color:var(--fav)">${fav}</div><div class="lbl">Favorites</div></div><div class="stat-card"><div class="val" style="color:var(--info)">${avg}</div><div class="lbl">Avg Rating</div></div>`;$('profileProgressBar').style.width=pct+'%';$('profileProgressLabel').textContent=pct+'% · '+watched+'/'+total;const years={};[...library,...trackerMovies].forEach(m=>{const y=m.year||(m.addedAt?new Date(m.addedAt).getFullYear():'Unknown');years[y]=(years[y]||0)+1});const yearEntries=Object.entries(years).sort((a,b)=>String(b[0]).localeCompare(String(a[0]))).slice(0,10);const maxY=Math.max(...yearEntries.map(e=>e[1]),1);$('yearChart').innerHTML=yearEntries.length?yearEntries.map(([y,c])=>`<div class="bar-row"><div class="bar-label">${escapeHtml(String(y))}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxY*100}%"></div></div><div class="bar-val">${c}</div></div>`).join(''):'<p style="color:var(--muted);font-size:.85rem">No data</p>';const status={Watched:watched,'On Watchlist':wl,Favorites:fav};const maxS=Math.max(...Object.values(status),1);$('statusChart').innerHTML=Object.entries(status).map(([g,c])=>`<div class="bar-row"><div class="bar-label">${g}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxS*100}%"></div></div><div class="bar-val">${c}</div></div>`).join('')}
+function cvRenderInsights(){
+  const all=[...library,...trackerMovies].filter(m=>m&&(m.title||m.name));
+  const watched=all.filter(m=>m.watched);
+  const nowY=new Date().getFullYear();
+  let mins=0;watched.forEach(m=>{const r=+m.runtime;if(r>0)mins+=r});
+  const hrs=Math.round(mins/60);
+  const thisYear=watched.filter(m=>{const t=m.watchedAt||m.addedAt;return t&&new Date(t).getFullYear()===nowY});
+  let ymins=0;thisYear.forEach(m=>{const r=+m.runtime;if(r>0)ymins+=r});
+  const favs=all.filter(m=>m.favorite).length;
+  const rated=all.filter(m=>+m.myRating>0);
+  const avg=rated.length?(rated.reduce((s,m)=>s+ +m.myRating,0)/rated.length).toFixed(1):'—';
+
+  const grid=$('cvInsightGrid');
+  if(grid)grid.innerHTML=[
+    ['📚 Tracked',all.length,'library + tracker'],
+    ['✅ Watched',watched.length,Math.round(watched.length/(all.length||1)*100)+'% complete'],
+    ['⏱ Watch time',hrs?hrs+' gh':'—',hrs?(mins.toLocaleString('en-IN')+' min total'):'runtime add karein'],
+    ['📅 '+nowY,thisYear.length,Math.round(ymins/60)+' gh is saal']
+  ].map(([k,v,sub])=>`<div class="cv-insight"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(String(v))}</div><div class="s">${escapeHtml(String(sub))}</div></div>`).join('');
+
+  /* last 12 months */
+  const months=[],idx={};
+  for(let i=11;i>=0;i--){
+    const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-i);
+    const o={label:d.toLocaleString('en',{month:'short'}),key:d.getFullYear()+'-'+d.getMonth(),n:0};
+    months.push(o);idx[o.key]=o;
+  }
+  watched.forEach(m=>{
+    const t=m.watchedAt||m.addedAt;if(!t)return;
+    const d=new Date(t);if(isNaN(d))return;
+    const b=idx[d.getFullYear()+'-'+d.getMonth()];if(b)b.n++;
+  });
+  const maxM=Math.max(...months.map(x=>x.n),1);
+  const mc=$('cvMonthChart');
+  if(mc){
+    mc.innerHTML=months.some(x=>x.n)
+      ?`<div class="cv-bars">${months.map(x=>`<div class="cv-bar${x.n?'':' zero'}"><b>${x.n||''}</b><div class="cv-bt"><i style="height:${x.n?Math.max(4,x.n/maxM*100):2}%"></i></div><span>${escapeHtml(x.label)}</span></div>`).join('')}</div>`
+      :'<p class="cv-empty">Abhi koi watched date nahi hai — tracker mein kisi title ko "Watched" mark karein, phir yahan mahine-wise activity dikhegi.</p>';
+  }
+
+  /* status donut */
+  const st={Watched:0,Watching:0,Watchlist:0,'On hold':0,Dropped:0};
+  const push=(k)=>{if(st[k]==null)st[k]=0;st[k]++};
+  [...trackerMovies].forEach(m=>{
+    let k='Watchlist';
+    if(typeof ctSt==='function'){const v=ctSt(m);k=v==='watched'?'Watched':v==='watching'?'Watching':v==='onhold'?'On hold':v==='dropped'?'Dropped':'Watchlist'}
+    else if(m.watched)k='Watched';
+    push(k);
+  });
+  [...library].forEach(m=>{if(m.watched)push('Watched');else if(m.inWatchlist)push('Watchlist')});
+  const colors={Watched:'#2fd67b',Watching:'#ff2f42',Watchlist:'#5b8cff','On hold':'#f5b81f',Dropped:'#7c7c92'};
+  const entries=Object.entries(st).filter(e=>e[1]>0);
+  const totalSt=entries.reduce((s,e)=>s+e[1],0);
+  const dc=$('cvStatusDonut');
+  if(dc){
+    if(!totalSt){dc.innerHTML='<p class="cv-empty">Status chart ke liye tracker mein kuch titles add karein.</p>'}
+    else{
+      let acc=0;
+      const stops=entries.map(([k,n])=>{const from=acc/totalSt*100;acc+=n;const to=acc/totalSt*100;return `${colors[k]||'#888'} ${from.toFixed(2)}% ${to.toFixed(2)}%`}).join(',');
+      const movies=all.filter(m=>{try{return typeof ctIsSer==='function'?!ctIsSer(m):true}catch(e){return true}}).length;
+      dc.innerHTML=`<div class="cv-donut-wrap">
+        <div class="cv-donut" style="background:conic-gradient(${stops})"><div class="cv-dc"><b>${totalSt}</b></div></div>
+        <div class="cv-legend">${entries.map(([k,n])=>`<div class="row"><i style="background:${colors[k]||'#888'}"></i><span>${escapeHtml(k)}</span><b>${n}</b></div>`).join('')}
+        <div class="cv-split">★ ${favs} favorites · 🎬 ${movies} movies · 📺 ${all.length-movies} series</div></div>
+      </div>`;
+    }
+  }
+
+  /* genres */
+  const gsrc=watched.length?watched:all;
+  const gc={};gsrc.forEach(m=>(m.genres||[]).forEach(g=>{if(g)gc[g]=(gc[g]||0)+1}));
+  const ge=Object.entries(gc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const gmax=Math.max(...ge.map(e=>e[1]),1);
+  const gcol=['var(--accent)','#5b8cff','#2fd67b','#f5b81f','#a855f7','#06b6d4','#f97316','#ec4899'];
+  const gEl=$('cvGenreChart');
+  if(gEl){
+    gEl.innerHTML=ge.length
+      ?ge.map(([g,c],i)=>`<div class="bar-row"><div class="bar-label" title="${escapeHtml(g)}">${escapeHtml(g)}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(4,c/gmax*100)}%;background:${gcol[i%gcol.length]}"></div></div><div class="bar-val">${c}</div></div>`).join('')
+      :'<p class="cv-empty">Genre chart ke liye titles mein genres add karein.</p>';
+  }
+
+  /* ratings */
+  const rc={};rated.forEach(m=>{const r=+m.myRating;if(r>=1&&r<=10)rc[r]=(rc[r]||0)+1});
+  const rmax=Math.max(...Object.values(rc),1);
+  const rEl=$('cvRatingChart');
+  if(rEl){
+    rEl.innerHTML=rated.length
+      ?`<div class="cv-rating">${[1,2,3,4,5,6,7,8,9,10].map(n=>{const c=rc[n]||0;return `<div class="cv-bar${c?'':' zero'}"><b>${c||''}</b><div class="cv-bt"><i style="height:${c?Math.max(4,c/rmax*100):2}%;background:${c?'linear-gradient(180deg,var(--fav),rgba(251,191,36,.3))':'rgba(255,255,255,.12)'}"></i></div><span>${n}</span></div>`}).join('')}</div><div class="cv-split">Average ★ ${escapeHtml(avg)} · ${rated.length} rated</div>`
+      :'<p class="cv-empty">Rating distribution ke liye titles ko ★ rate karein.</p>';
+  }
+}
+
+function renderProfile(){const watched=library.filter(m=>m.watched).length+trackerMovies.filter(m=>m.watched).length;const total=library.length+trackerMovies.length;const fav=library.filter(m=>m.favorite).length+trackerMovies.filter(m=>m.favorite).length;const wl=library.filter(m=>m.inWatchlist).length;const rated=library.filter(m=>m.myRating>0);const avg=rated.length?(rated.reduce((s,m)=>s+m.myRating,0)/rated.length).toFixed(1):'—';const pct=total?Math.round(watched/total*100):0;$('profileStats').innerHTML=`<div class="stat-card"><div class="val">${total}</div><div class="lbl">Tracked</div></div><div class="stat-card"><div class="val" style="color:var(--ok)">${watched}</div><div class="lbl">Watched</div></div><div class="stat-card"><div class="val" style="color:var(--fav)">${fav}</div><div class="lbl">Favorites</div></div><div class="stat-card"><div class="val" style="color:var(--info)">${avg}</div><div class="lbl">Avg Rating</div></div>`;$('profileProgressBar').style.width=pct+'%';$('profileProgressLabel').textContent=pct+'% · '+watched+'/'+total;const years={};[...library,...trackerMovies].forEach(m=>{const y=m.year||(m.addedAt?new Date(m.addedAt).getFullYear():'Unknown');years[y]=(years[y]||0)+1});const yearEntries=Object.entries(years).sort((a,b)=>String(b[0]).localeCompare(String(a[0]))).slice(0,10);const maxY=Math.max(...yearEntries.map(e=>e[1]),1);$('yearChart').innerHTML=yearEntries.length?yearEntries.map(([y,c])=>`<div class="bar-row"><div class="bar-label">${escapeHtml(String(y))}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxY*100}%"></div></div><div class="bar-val">${c}</div></div>`).join(''):'<p style="color:var(--muted);font-size:.85rem">No data</p>';const status={Watched:watched,'On Watchlist':wl,Favorites:fav};const maxS=Math.max(...Object.values(status),1);$('statusChart').innerHTML=Object.entries(status).map(([g,c])=>`<div class="bar-row"><div class="bar-label">${g}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxS*100}%"></div></div><div class="bar-val">${c}</div></div>`).join('');try{cvRenderInsights()}catch(e){console.warn('insights',e)}}
 
 function renderSettings(){const keyEl=$('tmdbApiKey');if(keyEl)keyEl.value=apiKey;const tvEl=$('tvApiUrl');if(tvEl)tvEl.value=tvUrl;const man=getManualTV();const ta=$('tvManualJson');if(ta&&man)ta.value=JSON.stringify(man,null,2);const st=$('tvManualStatus');if(st&&man)st.textContent=man.length+' programs saved';const apiSt=$('apiStatus');if(apiSt){apiSt.textContent=apiKey?'TMDB key saved':'Demo mode — add TMDB key';apiSt.style.color=apiKey?'var(--ok)':'var(--warn)'};try{cvRenderSafety();cvAskCacheCount()}catch(e){}}
 
