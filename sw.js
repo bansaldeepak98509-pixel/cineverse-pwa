@@ -1,6 +1,7 @@
 /* CineVerse Ultimate service worker */
-const CACHE = 'cineverse-v13';
-const IMG_CACHE = 'cineverse-v13-img';
+const CACHE = 'cineverse-v14';
+const IMG_CACHE = 'cineverse-v14-img';
+const IMG_LIMIT = 260; /* posters ka cap - phone storage bharna band */
 const SHELL = [
   './',
   './index.html',
@@ -11,6 +12,15 @@ const SHELL = [
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png'
 ];
+
+/* Poster cache ko limit mein rakho: purane posters pehle nikaalo (keys insertion order mein aate hain) */
+function trimImgCache() {
+  return caches.open(IMG_CACHE).then(c => c.keys().then(reqs => {
+    if (reqs.length <= IMG_LIMIT) return;
+    const extra = reqs.slice(0, reqs.length - IMG_LIMIT);
+    return Promise.all(extra.map(r => c.delete(r).catch(() => {})));
+  })).catch(() => {});
+}
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -24,8 +34,24 @@ self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE && k !== IMG_CACHE).map(k => caches.delete(k))))
+      .then(() => trimImgCache())
       .then(() => self.clients.claim())
   );
+});
+
+/* Page se poster cache ki jaankari / safai */
+self.addEventListener('message', e => {
+  const d = e.data || {};
+  if (d.type === 'cv-cache-count') {
+    caches.open(IMG_CACHE).then(c => c.keys()).then(keys => {
+      const msg = { type: 'cv-cache-count', count: keys.length };
+      if (e.source && e.source.postMessage) e.source.postMessage(msg);
+      else self.clients.matchAll({ includeUncontrolled: true }).then(cs => cs.forEach(c => c.postMessage(msg)));
+    }).catch(() => {});
+  }
+  if (d.type === 'cv-clear-img') {
+    caches.delete(IMG_CACHE).then(() => trimImgCache()).catch(() => {});
+  }
 });
 
 self.addEventListener('fetch', e => {
@@ -69,7 +95,7 @@ self.addEventListener('fetch', e => {
     caches.match(req).then(hit => hit || fetch(req).then(res => {
       if (res && (res.ok || res.type === 'opaque')) {
         const copy = res.clone();
-        caches.open(IMG_CACHE).then(c => c.put(req, copy)).catch(() => {});
+        caches.open(IMG_CACHE).then(c => c.put(req, copy)).then(trimImgCache).catch(() => {});
       }
       return res;
     }).catch(() => hit))

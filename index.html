@@ -697,9 +697,22 @@ html[data-design="v2"] .badge-s{padding:3px 9px}
 .toast.show{visibility:visible;opacity:1;transform:translateX(-50%) translateY(0)}
 @media(prefers-reduced-motion:reduce){.toast,.toast.show{transition:none}}
 </style>
+<style id="dataSafety">
+.backup-nudge{display:none;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;
+  background:linear-gradient(100deg,rgba(245,184,31,.16),rgba(245,184,31,.04));
+  border-bottom:1px solid rgba(245,184,31,.28);font-size:.8rem;color:var(--text)}
+.backup-nudge.show{display:flex}
+.backup-nudge .bn-text{flex:1;min-width:170px;line-height:1.35}
+.backup-nudge .bn-text strong{display:block;font-size:.8rem;color:var(--warn);margin-bottom:2px}
+.backup-nudge .bn-actions{display:flex;gap:6px;flex-shrink:0}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">📡 Offline — local tracking works</div>
+<div class="backup-nudge" id="backupNudge">
+  <div class="bn-text"><strong>Backup reminder</strong><span id="backupNudgeMsg">Aapka data sirf is device par hai — ek backup file save kar lein.</span></div>
+  <div class="bn-actions"><button class="btn btn-primary btn-sm" onclick="cvBackupNow()">💾 Backup lo</button><button class="btn btn-ghost btn-sm" onclick="cvSnoozeBackup()">Baad mein</button></div>
+</div>
 <header class="app-header">
 <button class="icon-btn menu-btn" id="mobileMenuBtn" aria-label="Menu">☰</button>
 <div class="logo" onclick="nav('home')" role="button" tabindex="0">Cine<span>Verse</span></div>
@@ -991,6 +1004,9 @@ Pathaan"></textarea>
 <div class="setting-row"><span>Clear search history</span><button class="btn btn-ghost btn-sm" onclick="clearSearchHistory()">Clear</button></div>
 <div class="setting-row"><span>Export all data</span><button class="btn btn-secondary btn-sm" onclick="exportAllData()">💾 Export</button></div>
 <div class="setting-row"><span>Import all data</span><button class="btn btn-secondary btn-sm" onclick="document.getElementById('importAllDataFile').click()">📥 Import</button><input id="importAllDataFile" type="file" accept="application/json,.json" style="display:none"></div>
+<div class="setting-row"><span>Last backup</span><span id="cvLastBackupText" style="font-size:.8rem;color:var(--muted)">—</span></div>
+<div class="setting-row"><span>Device storage</span><span id="cvStorageText" style="font-size:.8rem;color:var(--muted)">—</span></div>
+<div class="setting-row"><span>Poster cache</span><button class="btn btn-ghost btn-sm" onclick="cvClearPosterCache()">🧹 Clear</button></div>
 <p style="font-size:.75rem;color:var(--muted);line-height:1.45;margin-top:8px">Full backup mein settings, Movie Tracker, personal library, channel organizer aur app ka saved data shamil hoga. Backup file mein TMDB API key bhi ho sakti hai—ise private rakhein.</p>
 </div>
 </main>
@@ -1041,6 +1057,62 @@ const STORAGE={library:'cmtu_library_v1',tracker:'movieTrackerData_v1',tmdbKey:'
 const TMDB_IMG='https://image.tmdb.org/t/p/';
 let currentPage='home',library=[],trackerMovies=[],catalog=[],apiKey=localStorage.getItem(STORAGE.tmdbKey)||'',tvUrl=localStorage.getItem(STORAGE.tvUrl)||'',themePref=localStorage.getItem(STORAGE.theme)||'dark',searchAbort=null,wlFilter='all',trackerFilter='all',trackerSort='az',trackerQuery='',__tvCache=[];
 const $=s=>document.getElementById(s),$$=s=>Array.from(document.querySelectorAll(s));
+/* ===== Data safety: storage-full guard + backup reminder ===== */
+const BACKUP_KEY='cv_last_backup_v1',BACKUP_SNOOZE='cv_backup_snooze_v1',BACKUP_DAYS=7,SNOOZE_DAYS=3;
+let cvImgCount=null,cvQuotaWarned=false;
+/* localStorage bhar jaane par pehle chupchaap fail hota tha - ab saaf message */
+(function(){try{
+  const native=localStorage.setItem.bind(localStorage);
+  localStorage.setItem=function(k,v){
+    try{return native(k,v)}
+    catch(e){
+      if(!cvQuotaWarned){
+        cvQuotaWarned=true;
+        try{showToast('⚠️ Device storage bhar gaya — Settings se backup lekar poster cache clear karein',6000)}catch(x){}
+        try{document.getElementById('backupNudge').classList.add('show')}catch(x){}
+      }
+      throw e;
+    }
+  };
+}catch(e){}})();
+function cvLastBackup(){try{return +localStorage.getItem(BACKUP_KEY)||0}catch(e){return 0}}
+function cvMarkBackup(){try{localStorage.setItem(BACKUP_KEY,String(Date.now()));localStorage.removeItem(BACKUP_SNOOZE)}catch(e){}try{cvRenderSafety()}catch(e){}}
+function cvBackupDue(){const t=cvLastBackup();return !t||(Date.now()-t)>BACKUP_DAYS*86400000}
+function cvBackupNudgeShouldShow(){if(!cvBackupDue())return false;try{const sn=+localStorage.getItem(BACKUP_SNOOZE)||0;return !(sn&&Date.now()-sn<SNOOZE_DAYS*86400000)}catch(e){return true}}
+function cvRelTime(ts){if(!ts)return 'kabhi nahi';const d=Date.now()-ts,day=86400000;if(d<60000)return 'abhi abhi';if(d<3600000)return Math.round(d/60000)+' min pehle';if(d<day)return Math.round(d/3600000)+' ghante pehle';if(d<30*day)return Math.round(d/day)+' din pehle';return new Date(ts).toLocaleDateString()}
+function cvBackupNow(){try{exportAllData()}catch(e){try{showToast('Backup fail hua',3000)}catch(x){}}}
+function cvSnoozeBackup(){try{localStorage.setItem(BACKUP_SNOOZE,String(Date.now()))}catch(e){}try{cvRenderSafety();showToast('Theek hai — 3 din baad phir yaad dila dunga',2600)}catch(e){}}
+function cvAskCacheCount(){try{if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'cv-cache-count'})}catch(e){}}
+function cvClearPosterCache(){try{navigator.serviceWorker.controller.postMessage({type:'cv-clear-img'});cvImgCount=0;showToast('🧹 Poster cache clear ho gaya',3000);setTimeout(()=>{cvAskCacheCount();cvRenderSafety()},900)}catch(e){showToast('Cache clear nahi ho saka — internet se kholein',3000)}}
+function cvRenderStorage(){
+  const el=$('cvStorageText');if(!el)return;
+  const finish=t=>{el.textContent=t};
+  if(!(navigator.storage&&navigator.storage.estimate)){finish(cvImgCount!=null?cvImgCount+' posters cached':'—');return}
+  navigator.storage.estimate().then(est=>{
+    const used=((est&&est.usage)||0)/1048576,quota=((est&&est.quota)||0)/1048576;
+    let t=used.toFixed(1)+' MB used'+(quota?' / '+quota.toFixed(0)+' MB':'');
+    if(cvImgCount!=null)t+=' · '+cvImgCount+' posters';
+    finish(t);
+  }).catch(()=>finish(cvImgCount!=null?cvImgCount+' posters cached':'—'));
+}
+function cvRenderSafety(){
+  const n=$('backupNudge');
+  if(n){
+    const show=cvBackupNudgeShouldShow();
+    n.classList.toggle('show',show);
+    const m=$('backupNudgeMsg');
+    if(m){
+      const lb=cvLastBackup();
+      m.textContent=lb?('Last backup '+cvRelTime(lb)+' tha. Naya backup le lein.'):'Aapka data sirf is device par hai — ek backup file save kar lein.';
+    }
+  }
+  const lt=$('cvLastBackupText');if(lt)lt.textContent=cvRelTime(cvLastBackup());
+  cvRenderStorage();
+}
+try{if(navigator.serviceWorker){navigator.serviceWorker.addEventListener('message',e=>{const d=e.data||{};if(d.type==='cv-cache-count'){cvImgCount=+d.count||0;try{cvRenderSafety()}catch(x){}}})}}catch(e){}
+try{if('serviceWorker' in navigator){navigator.serviceWorker.ready.then(()=>{cvAskCacheCount()}).catch(()=>{})}}catch(e){}
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{try{cvRenderSafety();cvAskCacheCount()}catch(e){}},900)});
+
 const DEMO_MOVIES=[
 {id:'d1',title:'Border',poster:'https://upload.wikimedia.org/wikipedia/en/8/8e/Border_film_poster.jpg',releaseDate:'1997-06-13',year:1997,runtime:176,genres:['Action','War','Drama'],language:'Hindi',rating:7.9,director:'J.P. Dutta',actors:[{name:'Sunny Deol',character:'Kuldeep Singh'}],description:'Classic war drama based on the Battle of Longewala, 1971.',platforms:[{name:'JioHotstar',status:'subscription',url:'https://www.hotstar.com'}],isFree:false,popularity:90},
 {id:'d2',title:'Shershaah',poster:'https://upload.wikimedia.org/wikipedia/en/2/2e/Shershaah.jpg',releaseDate:'2021-08-12',year:2021,runtime:135,genres:['Action','Biography','War'],language:'Hindi',rating:8.4,director:'Vishnuvardhan',actors:[{name:'Sidharth Malhotra',character:'Vikram Batra'}],description:'Story of PVC recipient Captain Vikram Batra during Kargil War.',platforms:[{name:'JioHotstar',status:'subscription',url:'https://www.hotstar.com'}],isFree:false,popularity:88},
@@ -1153,11 +1225,11 @@ function renderTimeline(){$('totalMoviesCount').textContent=catalog.length;const
 
 function renderProfile(){const watched=library.filter(m=>m.watched).length+trackerMovies.filter(m=>m.watched).length;const total=library.length+trackerMovies.length;const fav=library.filter(m=>m.favorite).length+trackerMovies.filter(m=>m.favorite).length;const wl=library.filter(m=>m.inWatchlist).length;const rated=library.filter(m=>m.myRating>0);const avg=rated.length?(rated.reduce((s,m)=>s+m.myRating,0)/rated.length).toFixed(1):'—';const pct=total?Math.round(watched/total*100):0;$('profileStats').innerHTML=`<div class="stat-card"><div class="val">${total}</div><div class="lbl">Tracked</div></div><div class="stat-card"><div class="val" style="color:var(--ok)">${watched}</div><div class="lbl">Watched</div></div><div class="stat-card"><div class="val" style="color:var(--fav)">${fav}</div><div class="lbl">Favorites</div></div><div class="stat-card"><div class="val" style="color:var(--info)">${avg}</div><div class="lbl">Avg Rating</div></div>`;$('profileProgressBar').style.width=pct+'%';$('profileProgressLabel').textContent=pct+'% · '+watched+'/'+total;const years={};[...library,...trackerMovies].forEach(m=>{const y=m.year||(m.addedAt?new Date(m.addedAt).getFullYear():'Unknown');years[y]=(years[y]||0)+1});const yearEntries=Object.entries(years).sort((a,b)=>String(b[0]).localeCompare(String(a[0]))).slice(0,10);const maxY=Math.max(...yearEntries.map(e=>e[1]),1);$('yearChart').innerHTML=yearEntries.length?yearEntries.map(([y,c])=>`<div class="bar-row"><div class="bar-label">${escapeHtml(String(y))}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxY*100}%"></div></div><div class="bar-val">${c}</div></div>`).join(''):'<p style="color:var(--muted);font-size:.85rem">No data</p>';const status={Watched:watched,'On Watchlist':wl,Favorites:fav};const maxS=Math.max(...Object.values(status),1);$('statusChart').innerHTML=Object.entries(status).map(([g,c])=>`<div class="bar-row"><div class="bar-label">${g}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxS*100}%"></div></div><div class="bar-val">${c}</div></div>`).join('')}
 
-function renderSettings(){const keyEl=$('tmdbApiKey');if(keyEl)keyEl.value=apiKey;const tvEl=$('tvApiUrl');if(tvEl)tvEl.value=tvUrl;const man=getManualTV();const ta=$('tvManualJson');if(ta&&man)ta.value=JSON.stringify(man,null,2);const st=$('tvManualStatus');if(st&&man)st.textContent=man.length+' programs saved';const apiSt=$('apiStatus');if(apiSt){apiSt.textContent=apiKey?'TMDB key saved':'Demo mode — add TMDB key';apiSt.style.color=apiKey?'var(--ok)':'var(--warn)'}}
+function renderSettings(){const keyEl=$('tmdbApiKey');if(keyEl)keyEl.value=apiKey;const tvEl=$('tvApiUrl');if(tvEl)tvEl.value=tvUrl;const man=getManualTV();const ta=$('tvManualJson');if(ta&&man)ta.value=JSON.stringify(man,null,2);const st=$('tvManualStatus');if(st&&man)st.textContent=man.length+' programs saved';const apiSt=$('apiStatus');if(apiSt){apiSt.textContent=apiKey?'TMDB key saved':'Demo mode — add TMDB key';apiSt.style.color=apiKey?'var(--ok)':'var(--warn)'};try{cvRenderSafety();cvAskCacheCount()}catch(e){}}
 
 function saveApiConfig(doSync){apiKey=($('tmdbApiKey')?.value||'').trim();tvUrl=($('tvApiUrl')?.value||'').trim();localStorage.setItem(STORAGE.tmdbKey,apiKey);localStorage.setItem(STORAGE.tvUrl,tvUrl);$('apiStatus').textContent=apiKey?'Key saved.':'Demo mode.';showToast(apiKey?'✅ Saved':'Demo mode');if(doSync&&apiKey)syncLiveMovies()}
 
-function exportAllData(){try{saveLibrary();saveTracker();const storage={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k!==null)storage[k]=localStorage.getItem(k)}const data={format:'CineVerseFullBackup',version:1,exportedAt:new Date().toISOString(),app:'CineVerse Movie Tracker Ultimate',storage,summary:{storageKeys:Object.keys(storage).length,libraryItems:library.length,trackerMovies:trackerMovies.length,channelOrganizerItems:(()=>{try{return JSON.parse(storage['cineverse_tv_channel_organizer_v1']||'[]').length}catch{return 0}})()}};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='cineverse-full-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);showToast('✅ Full backup export start ho gaya ('+Object.keys(storage).length+' saved items)',4500)}catch(err){console.error('CineVerse export failed',err);showToast('❌ Export fail hua: browser storage access check karein',4500)}}
+function exportAllData(){try{saveLibrary();saveTracker();const storage={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k!==null)storage[k]=localStorage.getItem(k)}const data={format:'CineVerseFullBackup',version:1,exportedAt:new Date().toISOString(),app:'CineVerse Movie Tracker Ultimate',storage,summary:{storageKeys:Object.keys(storage).length,libraryItems:library.length,trackerMovies:trackerMovies.length,channelOrganizerItems:(()=>{try{return JSON.parse(storage['cineverse_tv_channel_organizer_v1']||'[]').length}catch{return 0}})()}};const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='cineverse-full-backup-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);showToast('✅ Full backup export start ho gaya ('+Object.keys(storage).length+' saved items)',4500);try{cvMarkBackup()}catch(e){}}catch(err){console.error('CineVerse export failed',err);showToast('❌ Export fail hua: browser storage access check karein',4500)}}
 
 async function importAllDataFile(file){if(!file)return;try{const text=await file.text();const data=JSON.parse(text);let incoming=null;
 if(data&&data.format==='CineVerseFullBackup'&&data.version===1&&data.storage&&typeof data.storage==='object'&&!Array.isArray(data.storage)){incoming={};for(const [k,v] of Object.entries(data.storage)){if(typeof k!=='string'||typeof v!=='string')throw new Error('Invalid storage entry');incoming[k]=v}}
