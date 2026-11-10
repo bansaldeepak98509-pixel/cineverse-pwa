@@ -706,6 +706,26 @@ html[data-design="v2"] .badge-s{padding:3px 9px}
 .backup-nudge .bn-text strong{display:block;font-size:.8rem;color:var(--warn);margin-bottom:2px}
 .backup-nudge .bn-actions{display:flex;gap:6px;flex-shrink:0}
 </style>
+<style id="trackerSel">
+.ct-selbtn{margin-left:auto}
+.ct-card.ct-selmode{cursor:pointer}
+.ct-card.ct-selmode .ct-actions{display:none}
+.ct-card.ct-selmode .ct-open{pointer-events:none}
+.ct-pick{position:absolute;top:8px;left:8px;z-index:4;width:28px;height:28px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.8);background:rgba(0,0,0,.55);color:#fff;font-size:.85rem;
+  font-weight:700;display:grid;place-items:center;backdrop-filter:blur(4px)}
+.ct-card.sel{box-shadow:0 0 0 2px var(--accent) inset,0 8px 22px rgba(0,0,0,.35)}
+.ct-card.sel .ct-pick{background:var(--accent);border-color:var(--accent)}
+.ct-selbar{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + var(--safe-b));z-index:900;
+  display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:10px 12px;
+  background:var(--glass);backdrop-filter:blur(16px);border-top:1px solid var(--border);
+  box-shadow:0 -10px 30px rgba(0,0,0,.4)}
+.ct-selbar[hidden]{display:none}
+body.ct-sel-open #page-tracker{padding-bottom:96px}
+.ct-selbar .ct-selcount{font-size:.8rem;font-weight:700;margin-right:auto;color:var(--text);white-space:nowrap}
+.ct-selbar .btn{padding:7px 11px;font-size:.76rem;border-radius:10px}
+@media(min-width:768px){.ct-selbar{left:236px;bottom:0}}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">📡 Offline — local tracking works</div>
@@ -912,10 +932,21 @@ Pathaan"></textarea>
 <div class="ct-chips" id="ctChips" role="group" aria-label="Filter library">
 <button type="button" class="chip active" data-f="all">All</button><button type="button" class="chip" data-f="watchlist">Watchlist</button><button type="button" class="chip" data-f="watching">Watching</button><button type="button" class="chip" data-f="watched">Watched</button><button type="button" class="chip" data-f="onhold">On Hold</button><button type="button" class="chip" data-f="dropped">Dropped</button><button type="button" class="chip" data-f="favorite">★ Favorites</button><button type="button" class="chip" data-f="movie">Movies</button><button type="button" class="chip" data-f="series">Series</button>
 </div>
+<button type="button" class="btn btn-ghost btn-sm ct-selbtn" data-a="selmode" id="ctSelBtn" aria-pressed="false">☑️ Select</button>
 <div class="ct-selects"><select id="trackerSort" aria-label="Sort by"><option value="az">Title A–Z</option><option value="za">Title Z–A</option><option value="newest">Recently Added</option><option value="oldest">Oldest Added</option><option value="yearDesc">Year: Newest</option><option value="yearAsc">Year: Oldest</option><option value="ratingDesc">Highest Rated</option><option value="ratingAsc">Lowest Rated</option><option value="watched">Recently Watched</option></select><select id="ctGenre" aria-label="Filter by genre" hidden></select><select id="ctYear" aria-label="Filter by year" hidden></select></div>
 <div class="ct-count" id="ctCount" aria-live="polite"></div>
 </div>
 <div id="trackerList" class="ct-grid"></div>
+<div class="ct-selbar" id="ctSelBar" hidden role="toolbar" aria-label="Selected titles actions">
+<span class="ct-selcount" id="ctSelCount">0 selected</span>
+<button type="button" class="btn btn-secondary btn-sm" data-a="selall">All</button>
+<button type="button" class="btn btn-secondary btn-sm" data-a="selnone">None</button>
+<button type="button" class="btn btn-primary btn-sm" data-a="bulk-watched">✓ Watched</button>
+<button type="button" class="btn btn-secondary btn-sm" data-a="bulk-watching">▶ Watching</button>
+<button type="button" class="btn btn-secondary btn-sm" data-a="bulk-fav">★ Favorite</button>
+<button type="button" class="btn btn-danger btn-sm" data-a="bulk-del">🗑 Delete</button>
+<button type="button" class="btn btn-ghost btn-sm" data-a="selmode">✕</button>
+</div>
 
 <input type="file" id="importJsonFile" accept=".json,application/json" class="hidden"/>
 <input type="file" id="importTxtFile" accept=".txt,text/plain" class="hidden"/>
@@ -1168,7 +1199,14 @@ function bindCardEvents(container){if(!container)return;container.querySelectorA
 
 function renderHome(){const featured=catalog.filter(m=>m.backdrop||m.poster).sort((a,b)=>(b.popularity||0)-(a.popularity||0))[0]||catalog[0];const hero=$('heroSection');if(featured&&hero){const bg=featured.backdrop||featured.poster||'';hero.innerHTML=`<div class="hero-bg" style="background-image:url('${escapeHtml(bg)}')"></div><div class="hero-content"><div class="hero-title">${escapeHtml(featured.title)}</div><div class="hero-meta">${featured.year?`<span>${featured.year}</span>`:''}${featured.rating?`<span>★ ${featured.rating}</span>`:''}${(featured.genres||[]).slice(0,3).map(g=>`<span>${escapeHtml(g)}</span>`).join('')}</div><div class="hero-desc">${escapeHtml(featured.description||'')}</div><div class="hero-actions"><button class="btn btn-primary" onclick="openMovieModal('${escapeHtml(String(featured.id))}')">▶ Details</button><button class="btn btn-secondary" onclick="toggleWatchlistFromHome('${escapeHtml(String(featured.id))}')">+ Watchlist</button></div></div>`}
 const strip=$('homeStatsStrip');if(strip){const watched=library.filter(m=>m.watched).length+trackerMovies.filter(m=>m.watched).length;const wl=library.filter(m=>m.inWatchlist).length;const fav=library.filter(m=>m.favorite).length+trackerMovies.filter(m=>m.favorite).length;strip.innerHTML=`<div class="smart-strip"><button type="button" class="smart-card" onclick="nav('movies')">🎬<span style="font-size:.75rem;color:var(--muted)">Catalog</span><strong>${catalog.length}</strong></button><button type="button" class="smart-card" onclick="nav('watchlist')">❤️<span style="font-size:.75rem;color:var(--muted)">Watchlist</span><strong>${wl}</strong></button><button type="button" class="smart-card" onclick="nav('tracker')">✅<span style="font-size:.75rem;color:var(--muted)">Watched</span><strong>${watched}</strong></button><button type="button" class="smart-card" onclick="nav('favorites')">⭐<span style="font-size:.75rem;color:var(--muted)">Favorites</span><strong>${fav}</strong></button></div>`}
-renderTodayRec();const sections=$('homeSections');if(!sections)return;const trending=catalog.slice(0,12);const bollywood=catalog.slice(0,12);const free=catalog.filter(m=>m.isFree).slice(0,12);const topRated=[...catalog].sort((a,b)=>(b.rating||0)-(a.rating||0)).slice(0,12);const recentLib=library.filter(m=>m.title).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0)).slice(0,8);const recentView=getRecentViewed();let html='';const section=(title,list,seePage)=>{if(!list.length)return'';return`<section><h2 class="section-title">${title}${seePage?`<button class="see-all" onclick="nav('${seePage}')">See all</button>`:''}</h2><div class="h-scroll">${list.map(createMovieCard).join('')}</div></section>`};html+=section('🔥 Trending',trending,'movies');html+=section('🇮🇳 Bollywood',bollywood,'bollywood');html+=section('⭐ Top Rated',topRated,'movies');html+=section('🆓 Free',free,'free');if(recentLib.length)html+=`<section><h2 class="section-title">❤️ Your Watchlist</h2><div class="h-scroll">${recentLib.map(m=>createMovieCard({id:m.id,title:m.title,poster:m.poster,year:m.year,rating:m.voteAvg})).join('')}</div></section>`;if(recentView.length)html+=section('👁️ Recently Viewed',recentView);sections.innerHTML=html;sections.querySelectorAll('.h-scroll').forEach(bindCardEvents)}
+renderTodayRec();const sections=$('homeSections');if(!sections)return;const trending=catalog.slice(0,12);const bollywood=catalog.slice(0,12);const free=catalog.filter(m=>m.isFree).slice(0,12);const topRated=[...catalog].sort((a,b)=>(b.rating||0)-(a.rating||0)).slice(0,12);const recentLib=library.filter(m=>m.title).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0)).slice(0,8);const recentView=getRecentViewed();let html='';const section=(title,list,seePage)=>{if(!list.length)return'';return`<section><h2 class="section-title">${title}${seePage?`<button class="see-all" onclick="nav('${seePage}')">See all</button>`:''}</h2><div class="h-scroll">${list.map(createMovieCard).join('')}</div></section>`};try{
+  if(typeof ctSt==='function'&&typeof ctMini==='function'){
+    const cont=trackerMovies.filter(m=>ctSt(m)==='watching')
+      .sort((a,b)=>(b.updatedAt||b.addedAt||0)-(a.updatedAt||a.addedAt||0)).slice(0,12);
+    if(cont.length)html+=`<section><h2 class="section-title">▶️ Continue Watching<button class="see-all" onclick="nav('tracker')">See all</button></h2><div class="ct-rail">${cont.map(ctMini).join('')}</div></section>`;
+  }
+}catch(e){}
+html+=section('🔥 Trending',trending,'movies');html+=section('🇮🇳 Bollywood',bollywood,'bollywood');html+=section('⭐ Top Rated',topRated,'movies');html+=section('🆓 Free',free,'free');if(recentLib.length)html+=`<section><h2 class="section-title">❤️ Your Watchlist</h2><div class="h-scroll">${recentLib.map(m=>createMovieCard({id:m.id,title:m.title,poster:m.poster,year:m.year,rating:m.voteAvg})).join('')}</div></section>`;if(recentView.length)html+=section('👁️ Recently Viewed',recentView);sections.innerHTML=html;sections.querySelectorAll('.h-scroll').forEach(bindCardEvents)}
 function renderTodayRec(){const el=$('todayRecList');if(!el)return;const dow=new Date().getDay();const moods=['Family','Action','Thriller','Drama','Comedy','Romance','Adventure'];const g=moods[dow];let list=catalog.filter(m=>(m.genres||[]).some(x=>x.toLowerCase().includes(g.toLowerCase()))).sort((a,b)=>(b.rating||0)-(a.rating||0)).slice(0,8);if(!list.length)list=catalog.slice(0,8);el.innerHTML=list.map(createMovieCard).join('');bindCardEvents(el)}
 function toggleWatchlistFromHome(id){const m=catalog.find(x=>String(x.id)===String(id));if(!m)return;const e=getLibEntry(id);const next=!(e&&e.inWatchlist);upsertLib(id,{title:m.title,poster:m.poster,year:m.year,voteAvg:m.rating,inWatchlist:next,tmdbId:m.tmdbId});showToast(next?'Added to Watchlist':'Removed')}
 function getSearchHistory(){try{return JSON.parse(localStorage.getItem(STORAGE.searchHist)||'[]')}catch{return[]}}
@@ -1380,7 +1418,7 @@ const ctMeta=m=>[m.year,ctTy(m),(m.genres||[]).slice(0,2).join(' / '),m.runtime?
 const ctChip=(m,cls)=>{const s=ctSt(m);return`<span class="ct-chip s-${s} ${cls||''}">${CT_STATUS[s].i} ${CT_STATUS[s].l}</span>`};
 function ctProg(m){if(ctIsSer(m)&&(m.season||m.episode))return'S'+(m.season||1)+' · E'+(m.episode||'–');if(m.progressMin&&m.runtime)return m.progressMin+'/'+m.runtime+' min';return''}
 function ctCard(m){const bad=m.name==='Loading…',t=ctE(bad?'⚠️ Title missing — ✎ se naam likhein':m.name),st=ctSt(m),pg=st==='watching'?ctProg(m):'';
-return`<article class="ct-card" data-id="${ctE(m.id)}"><div class="ct-pw"><button type="button" class="ct-open" data-a="open" aria-label="Open details: ${t}">${ctPoster(m)}</button>${ctChip(m)}<button type="button" class="ct-fav${m.favorite?' on':''}" data-a="fav" aria-pressed="${!!m.favorite}" aria-label="${m.favorite?'Remove from favorites':'Add to favorites'}" title="Favorite">${m.favorite?'★':'☆'}</button>${m.myRating?`<span class="ct-rate">★ ${m.myRating}</span>`:''}</div><div class="ct-info"><button type="button" class="ct-title" data-a="open" title="${t}">${t}</button><div class="ct-meta">${ctE(ctMeta(m))||'&nbsp;'}</div>${pg?`<div class="ct-prog">${ctE(pg)}</div>`:''}<div class="ct-actions"><select data-a="status" aria-label="Change status of ${t}">${Object.keys(CT_STATUS).map(k=>`<option value="${k}"${k===st?' selected':''}>${CT_STATUS[k].l}</option>`).join('')}</select><button type="button" data-a="edit" aria-label="Edit ${t}" title="Edit">✎</button><button type="button" class="danger" data-a="del" aria-label="Delete ${t}" title="Delete">🗑</button></div></div></article>`}
+return`<article class="ct-card${ctSelMode?(ctSel.has(m.id)?' sel':'')+' ct-selmode':''}" data-id="${ctE(m.id)}"><div class="ct-pw">${ctSelMode?`<button type="button" class="ct-pick" data-a="pick" aria-pressed="${ctSel.has(m.id)}" aria-label="Select ${t}">${ctSel.has(m.id)?'✓':''}</button>`:''}<button type="button" class="ct-open" data-a="open" aria-label="Open details: ${t}">${ctPoster(m)}</button>${ctChip(m)}<button type="button" class="ct-fav${m.favorite?' on':''}" data-a="fav" aria-pressed="${!!m.favorite}" aria-label="${m.favorite?'Remove from favorites':'Add to favorites'}" title="Favorite">${m.favorite?'★':'☆'}</button>${m.myRating?`<span class="ct-rate">★ ${m.myRating}</span>`:''}</div><div class="ct-info"><button type="button" class="ct-title" data-a="open" title="${t}">${t}</button><div class="ct-meta">${ctE(ctMeta(m))||'&nbsp;'}</div>${pg?`<div class="ct-prog">${ctE(pg)}</div>`:''}<div class="ct-actions"><select data-a="status" aria-label="Change status of ${t}">${Object.keys(CT_STATUS).map(k=>`<option value="${k}"${k===st?' selected':''}>${CT_STATUS[k].l}</option>`).join('')}</select><button type="button" data-a="edit" aria-label="Edit ${t}" title="Edit">✎</button><button type="button" class="danger" data-a="del" aria-label="Delete ${t}" title="Delete">🗑</button></div></div></article>`}
 const ctMini=m=>{const p=ctSt(m)==='watching'?ctProg(m):'';return`<button type="button" class="ct-mini" data-a="open" data-id="${ctE(m.id)}" title="${ctE(m.name)}">${ctPoster(m)}<span>${ctE(m.name)}</span>${p?`<em>${ctE(p)}</em>`:m.year?`<em>${ctE(m.year)}</em>`:''}</button>`};
 function ctFeatPool(exceptId){return trackerMovies.filter(m=>{const s=ctSt(m);return(s==='watchlist'||s==='watching')&&m.id!==exceptId&&m.name!=='Loading…'})}
 function ctFeatSave(m){try{localStorage.setItem(CT_FEAT_KEY,JSON.stringify({id:m.id,at:Date.now()}))}catch(e){}try{addShuffleHistory({id:m.id,name:m.name})}catch(e){}}
@@ -1464,6 +1502,40 @@ trackerMovies.push(ctNormalize({id:genId(),name:c,addedAt:Date.now(),catalogId:m
 async function ctBulk(to){const v=ctVisible().filter(m=>to==='watched'?ctSt(m)!=='watched':ctSt(m)==='watched');if(!v.length){showToast('Nothing to change in the current view');return}
 if(!await confirmDialog(to==='watched'?'Mark as watched?':'Mark as not watched?',v.length+' title(s) in the current view will be updated.'))return;v.forEach(m=>ctSetStatus(m,to==='watched'?'watched':'watchlist',true));saveTracker();renderTracker();showToast('✅ '+v.length+' updated')}
 function ctReset(){ctLimit=CT_PAGE;trackerFilter='all';trackerQuery='';ctGenre='';ctYear='';const q=$('trackerSearch');if(q)q.value='';ctSavePrefs();renderTracker()}
+
+/* ===== Multi-select bulk actions ===== */
+var ctSelMode=false,ctSel=new Set();
+function ctSelToggle(){ctSelMode=!ctSelMode;if(!ctSelMode)ctSel.clear();ctLimit=CT_PAGE;renderTracker();ctRenderSelBar();
+  if(ctSelMode)showToast('Titles tap karke select karein, phir neeche se action chunein',3200)}
+function ctSelPick(id){if(ctSel.has(id))ctSel.delete(id);else ctSel.add(id);const on=ctSel.has(id);document.querySelectorAll('#trackerList .ct-card').forEach(c=>{if(String(c.dataset.id)!==String(id))return;c.classList.toggle('sel',on);const b=c.querySelector('.ct-pick');if(b){b.textContent=on?'✓':'';b.setAttribute('aria-pressed',on?'true':'false')}});ctRenderSelBar()}
+function ctSelAll(){ctVisible().forEach(m=>ctSel.add(m.id));ctRenderList();ctRenderSelBar()}
+function ctRenderSelBar(){
+  const bar=$('ctSelBar');if(!bar)return;
+  bar.hidden=!ctSelMode;
+  const c=$('ctSelCount');if(c)c.textContent=ctSel.size+' selected';
+  const b=$('ctSelBtn');if(b){b.classList.toggle('active',ctSelMode);b.setAttribute('aria-pressed',ctSelMode?'true':'false');b.textContent=ctSelMode?'☑️ Selecting':'☑️ Select'}
+  try{document.body.classList.toggle('ct-sel-open',ctSelMode)}catch(e){}
+}
+async function ctSelBulk(action){
+  const ids=[...ctSel];if(!ids.length){showToast('Pehle kuch titles select karein');return}
+  const items=trackerMovies.filter(m=>ids.includes(m.id));if(!items.length){showToast('Kuch nahi mila');return}
+  if(action==='del'){
+    if(!await confirmDialog('Delete '+items.length+' title(s)?','Ye titles tracker se hat jaayenge. Wapas laane ke liye backup file chahiye hogi.'))return;
+    trackerMovies=trackerMovies.filter(m=>!ids.includes(m.id));saveTracker();
+    ctSel.clear();ctSelMode=false;renderTracker();ctRenderSelBar();updateTrackerStats();
+    showToast('🗑 '+items.length+' deleted');return;
+  }
+  if(action==='fav'){items.forEach(m=>{m.favorite=!m.favorite;m.updatedAt=Date.now()});saveTracker();
+    ctSel.clear();ctSelMode=false;renderTracker();ctRenderSelBar();showToast('★ '+items.length+' favorite updated');return}
+  const to=action==='watched'?'watched':'watching';
+  items.forEach(m=>ctSetStatus(m,to,true));saveTracker();
+  ctSel.clear();ctSelMode=false;renderTracker();ctRenderSelBar();
+  showToast((to==='watched'?'✅ ':'▶ ')+items.length+' → '+(to==='watched'?'Watched':'Watching'));
+}
+document.getElementById('page-home')?.addEventListener('click',e=>{
+  const b=e.target.closest('.ct-mini[data-id]');
+  if(b&&typeof ctOpenDetail==='function')ctOpenDetail(b.dataset.id);
+});
 function ctOverlayKeys(e){if(e.key==='Escape'){if($('ctForm').classList.contains('open'))ctHide('ctForm');else if($('ctDetail').classList.contains('open'))ctHide('ctDetail')}
 else if(e.key==='/'&&currentPage==='tracker'&&!/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||'')&&!document.querySelector('.ct-overlay.open')){e.preventDefault();$('trackerSearch').focus()}}
 function ctInit(){if(ctBound)return;ctBound=true;ctLoadPrefs();
@@ -1477,9 +1549,17 @@ if(t.dataset.f){ctLimit=CT_PAGE;trackerFilter=t.dataset.f;ctSavePrefs();renderTr
 const a=t.dataset.a,id=idOf(t);if(a==='reset'){ctReset();return}
 if(a==='more'){ctLimit+=CT_PAGE;ctRenderList();return}
 if(a==='shuffle'){ctShuffle();return}
+if(a==='selmode'){ctSelToggle();return}
+if(a==='selall'){ctSelAll();return}
+if(a==='selnone'){ctSel.clear();ctRenderList();ctRenderSelBar();return}
+if(a==='bulk-watched'){ctSelBulk('watched');return}
+if(a==='bulk-watching'){ctSelBulk('watching');return}
+if(a==='bulk-fav'){ctSelBulk('fav');return}
+if(a==='bulk-del'){ctSelBulk('del');return}
 if(a==='showbad'){trackerQuery='Loading…';$('trackerSearch').value=trackerQuery;ctLimit=CT_PAGE;renderTracker();$('ctControls').scrollIntoView({behavior:'smooth'});return}
 if(a==='addq'){const q=String(trackerQuery).trim();addSearchMovieToTracker(q,t).then(()=>{if(trackerMovies.some(m=>m.name.toLowerCase()===q.toLowerCase()))ctReset()});return}
 if(!id)return;const m=trackerMovies.find(x=>x.id===id);if(!m)return;
+if(a==='pick'){ctSelPick(id);return}
 if(a==='open')ctOpenDetail(id);else if(a==='fav')toggleTrackerFavorite(id);else if(a==='edit')ctOpenForm(id);else if(a==='del')deleteTrackerMovie(id);else if(a==='start')ctSetStatus(m,'watching');else if(a==='done')ctSetStatus(m,'watched')});
 page.addEventListener('change',e=>{const t=e.target;if(t.dataset.a==='status'){const m=trackerMovies.find(x=>x.id===idOf(t));if(m)ctSetStatus(m,t.value);return}
 if(t.id==='trackerSort')trackerSort=t.value;else if(t.id==='ctGenre')ctGenre=t.value;else if(t.id==='ctYear')ctYear=t.value;else return;ctLimit=CT_PAGE;ctSavePrefs();renderTracker()});
