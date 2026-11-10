@@ -759,6 +759,17 @@ body.ct-sel-open #page-tracker{padding-bottom:96px}
 @media(min-width:768px){.cv-insight-grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:380px){.cv-insight .v{font-size:1.35rem}}
 </style>
+<style id="reminders">
+.cv-rem-list{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+.cv-rem-list::-webkit-scrollbar{display:none}
+.cv-rem{flex:0 0 230px;display:flex;gap:10px;align-items:center;text-align:left;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;padding:9px;transition:border-color .18s,transform .18s}
+.cv-rem:hover{border-color:rgba(255,47,66,.4);transform:translateY(-2px)}
+.cv-rem img,.cv-rem .cv-rem-ph{width:40px;height:58px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--bg2)}
+.cv-rem .cv-rem-ph{display:grid;place-items:center;font-size:1.1rem;color:var(--muted)}
+.cv-rem b{display:block;font-size:.82rem;line-height:1.25;margin-bottom:3px}
+.cv-rem span{font-size:.7rem;color:var(--muted)}
+</style>
 </head>
 <body>
 <div class="offline-banner" id="offlineBanner">📡 Offline — local tracking works</div>
@@ -1053,6 +1064,11 @@ Pathaan"></textarea>
 <div class="setting-row"><span>Naya design (v2)</span><div class="toggle on" id="designToggle" role="switch" tabindex="0" aria-checked="true" aria-label="Naya design"></div></div>
 <p style="font-size:.72rem;color:var(--muted);line-height:1.45;margin-top:10px">Naya design pasand na aaye to ise off kar dein — purana layout turant wapas aa jaayega. Aapka data, tracker aur cloud sync par koi asar nahi padta.</p>
 </div>
+<div class="settings-group"><h4>🔔 Notifications</h4>
+<div class="setting-row"><span>Release reminders</span><div class="toggle" id="notifyToggle" role="switch" tabindex="0" aria-checked="false"></div></div>
+<p id="notifyStatus" style="font-size:.75rem;color:var(--muted);line-height:1.45;margin-top:8px">Tracker mein release date daaliye — release ke din app kholne par notification milega.</p>
+<button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="cvNotifyTest()">🔔 Test notification</button>
+</div>
 <div class="settings-group"><h4>TMDB API</h4>
 <p style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Free key from <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener" style="color:var(--info)">themoviedb.org</a></p>
 <input type="text" id="tmdbApiKey" placeholder="Paste TMDB API key" style="width:100%;padding:10px 12px;border-radius:10px;background:var(--card);border:1px solid var(--border);margin-bottom:8px"/>
@@ -1109,6 +1125,7 @@ Pathaan"></textarea>
 <div class="ct-f"><label for="ctf-name">Title *</label><input id="ctf-name" maxlength="160" enterkeyhint="next" required/></div>
 <div class="ct-f2"><div class="ct-f"><label for="ctf-type">Type</label><select id="ctf-type"></select></div><div class="ct-f"><label for="ctf-status">Status</label><select id="ctf-status"></select></div></div>
 <div class="ct-f2"><div class="ct-f"><label for="ctf-year">Release year</label><input id="ctf-year" inputmode="numeric" maxlength="4" placeholder="e.g. 2014"/></div><div class="ct-f"><label for="ctf-myRating">My rating</label><select id="ctf-myRating"></select></div></div>
+<div class="ct-f"><label for="ctf-release">Release date (optional — release reminder ke liye)</label><input id="ctf-release" type="date"/></div>
 <div class="ct-f"><label for="ctf-poster">Poster image link (optional)</label><input id="ctf-poster" type="url" inputmode="url" placeholder="https://…"/></div>
 <label class="ct-chk"><input type="checkbox" id="ctf-favorite"/> Add to favorites</label>
 <details class="ct-more" id="ctMore"><summary>More details (all optional)</summary><div class="ct-more-in">
@@ -1240,7 +1257,8 @@ function bindCardEvents(container){if(!container)return;container.querySelectorA
 
 function renderHome(){const featured=catalog.filter(m=>m.backdrop||m.poster).sort((a,b)=>(b.popularity||0)-(a.popularity||0))[0]||catalog[0];const hero=$('heroSection');if(featured&&hero){const bg=featured.backdrop||featured.poster||'';hero.innerHTML=`<div class="hero-bg" style="background-image:url('${escapeHtml(bg)}')"></div><div class="hero-content"><div class="hero-title">${escapeHtml(featured.title)}</div><div class="hero-meta">${featured.year?`<span>${featured.year}</span>`:''}${featured.rating?`<span>★ ${featured.rating}</span>`:''}${(featured.genres||[]).slice(0,3).map(g=>`<span>${escapeHtml(g)}</span>`).join('')}</div><div class="hero-desc">${escapeHtml(featured.description||'')}</div><div class="hero-actions"><button class="btn btn-primary" onclick="openMovieModal('${escapeHtml(String(featured.id))}')">▶ Details</button><button class="btn btn-secondary" onclick="toggleWatchlistFromHome('${escapeHtml(String(featured.id))}')">+ Watchlist</button></div></div>`}
 const strip=$('homeStatsStrip');if(strip){const watched=library.filter(m=>m.watched).length+trackerMovies.filter(m=>m.watched).length;const wl=library.filter(m=>m.inWatchlist).length;const fav=library.filter(m=>m.favorite).length+trackerMovies.filter(m=>m.favorite).length;strip.innerHTML=`<div class="smart-strip"><button type="button" class="smart-card" onclick="nav('movies')">🎬<span style="font-size:.75rem;color:var(--muted)">Catalog</span><strong>${catalog.length}</strong></button><button type="button" class="smart-card" onclick="nav('watchlist')">❤️<span style="font-size:.75rem;color:var(--muted)">Watchlist</span><strong>${wl}</strong></button><button type="button" class="smart-card" onclick="nav('tracker')">✅<span style="font-size:.75rem;color:var(--muted)">Watched</span><strong>${watched}</strong></button><button type="button" class="smart-card" onclick="nav('favorites')">⭐<span style="font-size:.75rem;color:var(--muted)">Favorites</span><strong>${fav}</strong></button></div>`}
-renderTodayRec();const sections=$('homeSections');if(!sections)return;const trending=catalog.slice(0,12);const bollywood=catalog.slice(0,12);const free=catalog.filter(m=>m.isFree).slice(0,12);const topRated=[...catalog].sort((a,b)=>(b.rating||0)-(a.rating||0)).slice(0,12);const recentLib=library.filter(m=>m.title).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0)).slice(0,8);const recentView=getRecentViewed();let html='';const section=(title,list,seePage)=>{if(!list.length)return'';return`<section><h2 class="section-title">${title}${seePage?`<button class="see-all" onclick="nav('${seePage}')">See all</button>`:''}</h2><div class="h-scroll">${list.map(createMovieCard).join('')}</div></section>`};try{
+renderTodayRec();const sections=$('homeSections');if(!sections)return;const trending=catalog.slice(0,12);const bollywood=catalog.slice(0,12);const free=catalog.filter(m=>m.isFree).slice(0,12);const topRated=[...catalog].sort((a,b)=>(b.rating||0)-(a.rating||0)).slice(0,12);const recentLib=library.filter(m=>m.title).sort((a,b)=>(b.addedAt||0)-(a.addedAt||0)).slice(0,8);const recentView=getRecentViewed();let html='';const section=(title,list,seePage)=>{if(!list.length)return'';return`<section><h2 class="section-title">${title}${seePage?`<button class="see-all" onclick="nav('${seePage}')">See all</button>`:''}</h2><div class="h-scroll">${list.map(createMovieCard).join('')}</div></section>`};try{if(typeof cvUpcomingHtml==='function')html+=cvUpcomingHtml()}catch(e){}
+try{
   if(typeof ctSt==='function'&&typeof ctMini==='function'){
     const cont=trackerMovies.filter(m=>ctSt(m)==='watching')
       .sort((a,b)=>(b.updatedAt||b.addedAt||0)-(a.updatedAt||a.addedAt||0)).slice(0,12);
@@ -1278,7 +1296,7 @@ setInterval(()=>{if(currentPage!=='tv')return;document.querySelectorAll('.tv-car
 
 function trackerCatalogMatch(t){if(!t)return null;return catalog.find(m=>(t.catalogId&&String(m.id)===String(t.catalogId))||(t.tmdbId&&String(m.tmdbId)===String(t.tmdbId))||String(m.title||'').toLowerCase()===String(t.name||'').toLowerCase())||null}
 function trackerToMovie(t){const m=trackerCatalogMatch(t);if(m)return m;return{id:t.id,title:t.name,tmdbId:t.tmdbId||null,poster:t.poster||'',backdrop:t.backdrop||'',year:t.year||null,rating:t.rating||0,genres:t.genres||[],actors:t.actors||[],description:t.description||'',language:t.language||'',runtime:t.runtime||0}}
-async function addSearchMovieToTracker(query,button){query=String(query||'').trim();if(!query)return;if(button){button.disabled=true;button.textContent='🔄 Adding…'}try{if(apiKey){const res=await searchTmdb(query);if(res.movies.length){let m=await enrichMovie(res.movies[0]);if(!catalog.some(x=>String(x.id)===String(m.id)))catalog.unshift(m);const ok=addTrackerMovie(m.title,{catalogId:m.id,tmdbId:m.tmdbId,poster:m.poster,backdrop:m.backdrop,year:m.year,rating:m.rating,genres:m.genres,actors:m.actors,description:m.description,language:m.language,runtime:m.runtime});if(ok){showToast('✅ '+m.title+' added with TMDB details');renderTracker()}return}}const ok=addTrackerMovie(query);if(ok){showToast('✅ '+query+' added to My Tracker');renderTracker()}}catch(e){const ok=addTrackerMovie(query);if(ok){showToast('✅ '+query+' added to My Tracker');renderTracker()}else showToast('❌ Could not add movie')}finally{if(button){button.disabled=false;button.textContent='📋 Add “'+query+'” to My Tracker'}}}
+async function addSearchMovieToTracker(query,button){query=String(query||'').trim();if(!query)return;if(button){button.disabled=true;button.textContent='🔄 Adding…'}try{if(apiKey){const res=await searchTmdb(query);if(res.movies.length){let m=await enrichMovie(res.movies[0]);if(!catalog.some(x=>String(x.id)===String(m.id)))catalog.unshift(m);const ok=addTrackerMovie(m.title,{catalogId:m.id,tmdbId:m.tmdbId,poster:m.poster,backdrop:m.backdrop,year:m.year,rating:m.rating,genres:m.genres,actors:m.actors,description:m.description,language:m.language,runtime:m.runtime,releaseDate:m.releaseDate});if(ok){showToast('✅ '+m.title+' added with TMDB details');renderTracker()}return}}const ok=addTrackerMovie(query);if(ok){showToast('✅ '+query+' added to My Tracker');renderTracker()}}catch(e){const ok=addTrackerMovie(query);if(ok){showToast('✅ '+query+' added to My Tracker');renderTracker()}else showToast('❌ Could not add movie')}finally{if(button){button.disabled=false;button.textContent='📋 Add “'+query+'” to My Tracker'}}}
 
 function tvNowParts(){const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(new Date());const o={};parts.forEach(x=>o[x.type]=x.value);return o}
 
@@ -1396,7 +1414,7 @@ function cvRenderInsights(){
 
 function renderProfile(){const watched=library.filter(m=>m.watched).length+trackerMovies.filter(m=>m.watched).length;const total=library.length+trackerMovies.length;const fav=library.filter(m=>m.favorite).length+trackerMovies.filter(m=>m.favorite).length;const wl=library.filter(m=>m.inWatchlist).length;const rated=library.filter(m=>m.myRating>0);const avg=rated.length?(rated.reduce((s,m)=>s+m.myRating,0)/rated.length).toFixed(1):'—';const pct=total?Math.round(watched/total*100):0;$('profileStats').innerHTML=`<div class="stat-card"><div class="val">${total}</div><div class="lbl">Tracked</div></div><div class="stat-card"><div class="val" style="color:var(--ok)">${watched}</div><div class="lbl">Watched</div></div><div class="stat-card"><div class="val" style="color:var(--fav)">${fav}</div><div class="lbl">Favorites</div></div><div class="stat-card"><div class="val" style="color:var(--info)">${avg}</div><div class="lbl">Avg Rating</div></div>`;$('profileProgressBar').style.width=pct+'%';$('profileProgressLabel').textContent=pct+'% · '+watched+'/'+total;const years={};[...library,...trackerMovies].forEach(m=>{const y=m.year||(m.addedAt?new Date(m.addedAt).getFullYear():'Unknown');years[y]=(years[y]||0)+1});const yearEntries=Object.entries(years).sort((a,b)=>String(b[0]).localeCompare(String(a[0]))).slice(0,10);const maxY=Math.max(...yearEntries.map(e=>e[1]),1);$('yearChart').innerHTML=yearEntries.length?yearEntries.map(([y,c])=>`<div class="bar-row"><div class="bar-label">${escapeHtml(String(y))}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxY*100}%"></div></div><div class="bar-val">${c}</div></div>`).join(''):'<p style="color:var(--muted);font-size:.85rem">No data</p>';const status={Watched:watched,'On Watchlist':wl,Favorites:fav};const maxS=Math.max(...Object.values(status),1);$('statusChart').innerHTML=Object.entries(status).map(([g,c])=>`<div class="bar-row"><div class="bar-label">${g}</div><div class="bar-track"><div class="bar-fill" style="width:${c/maxS*100}%"></div></div><div class="bar-val">${c}</div></div>`).join('');try{cvRenderInsights()}catch(e){console.warn('insights',e)}}
 
-function renderSettings(){const keyEl=$('tmdbApiKey');if(keyEl)keyEl.value=apiKey;const tvEl=$('tvApiUrl');if(tvEl)tvEl.value=tvUrl;const man=getManualTV();const ta=$('tvManualJson');if(ta&&man)ta.value=JSON.stringify(man,null,2);const st=$('tvManualStatus');if(st&&man)st.textContent=man.length+' programs saved';const apiSt=$('apiStatus');if(apiSt){apiSt.textContent=apiKey?'TMDB key saved':'Demo mode — add TMDB key';apiSt.style.color=apiKey?'var(--ok)':'var(--warn)'};try{cvRenderSafety();cvAskCacheCount()}catch(e){}}
+function renderSettings(){const keyEl=$('tmdbApiKey');if(keyEl)keyEl.value=apiKey;const tvEl=$('tvApiUrl');if(tvEl)tvEl.value=tvUrl;const man=getManualTV();const ta=$('tvManualJson');if(ta&&man)ta.value=JSON.stringify(man,null,2);const st=$('tvManualStatus');if(st&&man)st.textContent=man.length+' programs saved';const apiSt=$('apiStatus');if(apiSt){apiSt.textContent=apiKey?'TMDB key saved':'Demo mode — add TMDB key';apiSt.style.color=apiKey?'var(--ok)':'var(--warn)'};try{cvRenderSafety();cvAskCacheCount();if(typeof cvNotifyPaint==='function')cvNotifyPaint()}catch(e){}}
 
 function saveApiConfig(doSync){apiKey=($('tmdbApiKey')?.value||'').trim();tvUrl=($('tvApiUrl')?.value||'').trim();localStorage.setItem(STORAGE.tmdbKey,apiKey);localStorage.setItem(STORAGE.tvUrl,tvUrl);$('apiStatus').textContent=apiKey?'Key saved.':'Demo mode.';showToast(apiKey?'✅ Saved':'Demo mode');if(doSync&&apiKey)syncLiveMovies()}
 
@@ -1531,7 +1549,7 @@ const ctHue=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%360;re
 const ctIsSer=m=>ctTy(m)==='Series'||ctTy(m)==='Anime';
 /* Safe defaults when reading: unknown/legacy fields are preserved, missing new fields get defaults */
 function ctNormalize(m){const st=CT_STATUS[m.status]?m.status:(m.watched?'watched':'watchlist');
-return Object.assign({},m,{id:m.id||genId(),name:String(m.name||m.title||'Untitled'),status:st,watched:st==='watched',favorite:!!m.favorite,addedAt:ctMs(m.addedAt)||Date.now(),watchedAt:st==='watched'?(ctMs(m.watchedAt)||null):null,catalogId:m.catalogId||null,tmdbId:m.tmdbId||null,poster:m.poster||'',backdrop:m.backdrop||'',year:m.year||null,rating:Number(m.rating)||0,genres:Array.isArray(m.genres)?m.genres.map(String):[],actors:Array.isArray(m.actors)?m.actors:[],description:m.description||'',language:m.language||'',runtime:Number(m.runtime)||0,type:ctTy(m),myRating:ctNum(m.myRating,0,10),notes:String(m.notes||''),platform:String(m.platform||''),season:ctNum(m.season,0,9999),episode:ctNum(m.episode,0,9999),progressMin:ctNum(m.progressMin,0,100000)})}
+return Object.assign({},m,{id:m.id||genId(),name:String(m.name||m.title||'Untitled'),status:st,watched:st==='watched',favorite:!!m.favorite,addedAt:ctMs(m.addedAt)||Date.now(),watchedAt:st==='watched'?(ctMs(m.watchedAt)||null):null,catalogId:m.catalogId||null,tmdbId:m.tmdbId||null,poster:m.poster||'',backdrop:m.backdrop||'',year:m.year||null,rating:Number(m.rating)||0,genres:Array.isArray(m.genres)?m.genres.map(String):[],actors:Array.isArray(m.actors)?m.actors:[],description:m.description||'',language:m.language||'',runtime:Number(m.runtime)||0,type:ctTy(m),myRating:ctNum(m.myRating,0,10),notes:String(m.notes||''),platform:String(m.platform||''),season:ctNum(m.season,0,9999),episode:ctNum(m.episode,0,9999),progressMin:ctNum(m.progressMin,0,100000),releaseDate:String(m.releaseDate||'')})}
 function ctSetStatus(m,s,quiet){if(!CT_STATUS[s])return;m.status=s;m.watched=s==='watched';if(s==='watched'){if(!m.watchedAt)m.watchedAt=Date.now()}else m.watchedAt=null;m.updatedAt=Date.now();if(!quiet){saveTracker();renderTracker();ctRefreshDetail(m.id);showToast(CT_STATUS[s].i+' '+m.name+' → '+CT_STATUS[s].l)}}
 function ctLoadPrefs(){try{const p=JSON.parse(localStorage.getItem(CT_PREFS_KEY)||'{}');const F=['all','watchlist','watching','watched','onhold','dropped','favorite','movie','series'],S=['az','za','newest','oldest','yearDesc','yearAsc','ratingDesc','ratingAsc','watched'];if(F.includes(p.f))trackerFilter=p.f;if(S.includes(p.s))trackerSort=p.s;ctGenre=typeof p.g==='string'?p.g:'';ctYear=typeof p.y==='string'?p.y:''}catch(e){}}
 function ctSavePrefs(){try{localStorage.setItem(CT_PREFS_KEY,JSON.stringify({f:trackerFilter,s:trackerSort,g:ctGenre,y:ctYear}))}catch(e){}}
@@ -1602,7 +1620,7 @@ ${m.description?`<h4 class="ct-h4">Overview (saved)</h4><div class="ct-note">${c
 function ctOpenDetail(id){const m=trackerMovies.find(x=>x.id===id);if(!m)return;ctDetailId=id;ctFocus=document.activeElement;ctDrawDetail(m);ctShow('ctDetail');$('ctDetail').querySelector('.ct-x').focus({preventScroll:true})}
 function ctRefreshDetail(id){if(ctDetailId===id&&$('ctDetail').classList.contains('open')){const m=trackerMovies.find(x=>x.id===id);if(m)ctDrawDetail(m)}}
 function ctOpenForm(id){const m=id?trackerMovies.find(x=>x.id===id):null;if(id&&!m)return;ctEditId=m?m.id:null;ctFocus=document.activeElement;const r=m||{},set=(k,v)=>{$('ctf-'+k).value=v==null?'':v};
-$('ctFormTitle').textContent=m?'Edit title':'Add movie';set('name',r.name);set('poster',r.poster);set('year',r.year);set('type',m?ctTy(r):'Movie');set('status',m?ctSt(r):'watchlist');set('myRating',r.myRating||0);$('ctf-favorite').checked=!!r.favorite;
+$('ctFormTitle').textContent=m?'Edit title':'Add movie';set('name',r.name);set('poster',r.poster);set('year',r.year);set('release',r.releaseDate||'');set('type',m?ctTy(r):'Movie');set('status',m?ctSt(r):'watchlist');set('myRating',r.myRating||0);$('ctf-favorite').checked=!!r.favorite;
 set('genres',(r.genres||[]).join(', '));set('language',r.language);set('platform',r.platform);set('runtime',r.runtime||'');set('season',r.season||'');set('episode',r.episode||'');set('progressMin',r.progressMin||'');set('addedAt',ctDay(r.addedAt||Date.now()));set('watchedAt',ctDay(r.watchedAt));set('notes',r.notes);
 $('ctMore').open=!!m&&!!(r.genres&&r.genres.length||r.language||r.platform||r.runtime||r.season||r.episode||r.progressMin||r.notes||r.watchedAt);
 $('ctfErr').hidden=true;ctTypeUI();ctShow('ctForm');$('ctf-name').focus({preventScroll:true})}
@@ -1614,6 +1632,7 @@ const int=(k,lbl,lo,hi)=>{const v=g(k);if(!v)return 0;const n=Number(v);if(!Numb
 rec.year=int('year','Year',1888,new Date().getFullYear()+10)||null;rec.runtime=int('runtime','Runtime',1,1500);rec.season=int('season','Season',1,9999);rec.episode=int('episode','Episode',1,9999);rec.progressMin=int('progressMin','Minutes watched',1,100000);
 if(rec.progressMin&&rec.runtime&&rec.progressMin>rec.runtime)err.push('Minutes watched cannot exceed the runtime.');
 const pu=g('poster');if(pu&&!ctUrl(pu))err.push('Poster must be a link starting with http:// or https://.');rec.poster=pu;
+const rl=g('release');rec.releaseDate=(rl&&!isNaN(new Date(rl)))?rl:'';
 rec.type=$('ctf-type').value;rec.status=$('ctf-status').value;if(!CT_TYPES.includes(rec.type)||!CT_STATUS[rec.status])err.push('Choose a valid type and status.');
 rec.myRating=ctNum($('ctf-myRating').value,0,10);rec.favorite=$('ctf-favorite').checked;
 rec.genres=[...new Set(g('genres').split(',').map(x=>x.trim()).filter(Boolean))].slice(0,8);rec.language=g('language').slice(0,40);rec.platform=g('platform').slice(0,60);rec.notes=$('ctf-notes').value.trim().slice(0,5000);
@@ -1631,7 +1650,7 @@ function toggleTrackerMovie(id){const m=trackerMovies.find(x=>x.id===id);if(m)ct
 function toggleTrackerFavorite(id){const m=trackerMovies.find(x=>x.id===id);if(!m)return;m.favorite=!m.favorite;m.updatedAt=Date.now();saveTracker();renderTracker();ctRefreshDetail(id);showToast(m.favorite?'★ Added to favorites':'Removed from favorites')}
 async function deleteTrackerMovie(id){const m=trackerMovies.find(x=>x.id===id);if(!m)return;const ok=await confirmDialog('Delete this title?','“'+m.name+'” will be removed from your library. This cannot be undone.');if(!ok)return;trackerMovies=trackerMovies.filter(x=>x.id!==id);if(ctDetailId===id&&$('ctDetail').classList.contains('open'))ctHide('ctDetail');saveTracker();renderTracker();showToast('Deleted “'+m.name+'”')}
 function addTrackerMovie(name,meta){meta=meta||{};const c=String(name||'').trim().replace(/\s+/g,' ');if(!c){showToast('Please enter a title');return false}if(c.length>160){showToast('Title is too long');return false}if(trackerMovies.some(m=>m.name.toLowerCase()===c.toLowerCase())){showToast('“'+c+'” is already in your library');return false}
-trackerMovies.push(ctNormalize({id:genId(),name:c,addedAt:Date.now(),catalogId:meta.catalogId,tmdbId:meta.tmdbId,poster:meta.poster,backdrop:meta.backdrop,year:meta.year,rating:meta.rating,genres:meta.genres,actors:meta.actors,description:meta.description,language:meta.language,runtime:meta.runtime}));return saveTracker()}
+trackerMovies.push(ctNormalize({id:genId(),name:c,addedAt:Date.now(),catalogId:meta.catalogId,tmdbId:meta.tmdbId,poster:meta.poster,backdrop:meta.backdrop,year:meta.year,rating:meta.rating,genres:meta.genres,actors:meta.actors,description:meta.description,language:meta.language,runtime:meta.runtime,releaseDate:meta.releaseDate}));return saveTracker()}
 async function ctBulk(to){const v=ctVisible().filter(m=>to==='watched'?ctSt(m)!=='watched':ctSt(m)==='watched');if(!v.length){showToast('Nothing to change in the current view');return}
 if(!await confirmDialog(to==='watched'?'Mark as watched?':'Mark as not watched?',v.length+' title(s) in the current view will be updated.'))return;v.forEach(m=>ctSetStatus(m,to==='watched'?'watched':'watchlist',true));saveTracker();renderTracker();showToast('✅ '+v.length+' updated')}
 function ctReset(){ctLimit=CT_PAGE;trackerFilter='all';trackerQuery='';ctGenre='';ctYear='';const q=$('trackerSearch');if(q)q.value='';ctSavePrefs();renderTracker()}
@@ -1666,6 +1685,8 @@ async function ctSelBulk(action){
   showToast((to==='watched'?'✅ ':'▶ ')+items.length+' → '+(to==='watched'?'Watched':'Watching'));
 }
 document.getElementById('page-home')?.addEventListener('click',e=>{
+  const rem=e.target.closest('.cv-rem[data-rem]');
+  if(rem&&typeof ctOpenDetail==='function'){ctOpenDetail(rem.dataset.rem);return}
   const b=e.target.closest('.ct-mini[data-id]');
   if(b&&typeof ctOpenDetail==='function')ctOpenDetail(b.dataset.id);
 });
@@ -2503,6 +2524,152 @@ document.addEventListener('DOMContentLoaded',init);
     t.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();flip()}});
   });
   window.cvToggleDesign=flip;
+})();
+</script>
+<script>
+/* ===== Release reminders (local notifications, koi server nahi) ===== */
+(function(){
+  'use strict';
+  var ON='cv_notify_on_v1', SEEN='cv_notified_v1', WINDOW_DAYS=7;
+  function ls(k){try{return localStorage.getItem(k)}catch(e){return null}}
+  function set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+  function isOn(){return ls(ON)==='1'}
+  function seen(){try{return JSON.parse(ls(SEEN)||'{}')||{}}catch(e){return {}}}
+  function setSeen(o){set(SEEN,JSON.stringify(o))}
+  function dayKey(d){try{return d.toISOString().slice(0,10)}catch(e){return String(d)}}
+  function parseDate(v){
+    if(!v)return null;
+    var str=String(v).trim();
+    var d=new Date(str.length===4?str+'-01-01':str);
+    if(isNaN(d.getTime()))return null;
+    d.setHours(0,0,0,0);return d;
+  }
+  function supported(){return typeof Notification!=='undefined'&&'serviceWorker' in navigator}
+  window.cvNotifySupported=supported;
+
+  /* agle N din mein release hone wali titles (tracker se) */
+  window.cvUpcoming=function(days){
+    days=days||WINDOW_DAYS;
+    var today=new Date();today.setHours(0,0,0,0);
+    var end=new Date(today.getTime()+days*86400000);
+    var out=[];
+    var list=[];
+    try{list=(typeof trackerMovies!=='undefined'&&Array.isArray(trackerMovies))?trackerMovies:[]}catch(e){list=[]}
+    list.forEach(function(m){
+      var d=parseDate(m.releaseDate);if(!d)return;
+      if(d<today||d>end)return;
+      try{if(typeof ctSt==='function'&&ctSt(m)==='watched')return}catch(e){}
+      out.push({id:String(m.id),name:m.name,poster:m.poster||'',date:d,days:Math.round((d-today)/86400000)});
+    });
+    out.sort(function(a,b){return a.date-b.date});
+    return out;
+  };
+
+  window.cvUpcomingHtml=function(){
+    var list=window.cvUpcoming(WINDOW_DAYS);
+    if(!list.length)return '';
+    var cards=list.map(function(x){
+      var when=x.days===0?'Aaj':x.days===1?'Kal':(x.days+' din baad');
+      var day=x.date.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+      return '<button type="button" class="cv-rem" data-rem="'+escapeHtml(x.id)+'">'+
+        (x.poster?'<img src="'+escapeHtml(x.poster)+'" alt="" loading="lazy"/>':'<div class="cv-rem-ph">🎬</div>')+
+        '<div><b>'+escapeHtml(x.name)+'</b><span>'+escapeHtml(when)+' · '+escapeHtml(day)+'</span></div></button>';
+    }).join('');
+    return '<section><h2 class="section-title">🔔 Is hafte aa rahi hain'+(list.length>1?' ('+list.length+')':'')+'</h2><div class="cv-rem-list">'+cards+'</div></section>';
+  };
+
+  window.cvNotifyPaint=function(){
+    var tg=document.getElementById('notifyToggle'), st=document.getElementById('notifyStatus');
+    if(tg){
+      var active=isOn()&&supported()&&Notification.permission==='granted';
+      tg.classList.toggle('on',active);
+      tg.setAttribute('aria-checked',active?'true':'false');
+    }
+    if(st){
+      var txt;
+      if(!supported())txt='Is browser mein notifications support nahi hain.';
+      else if(Notification.permission==='denied')txt='Browser ne notifications block kar diye hain — site settings se allow karein.';
+      else if(!isOn())txt='Tracker mein release date daaliye — release ke din app kholne par notification milega.';
+      else if(Notification.permission!=='granted')txt='Reminders on hain par permission nahi mili — toggle dabaiye.';
+      else{
+        var up=window.cvUpcoming(WINDOW_DAYS);
+        txt=up.length?(up.length+' title is hafte aa rahi hain — release ke din reminder milega.'):'Reminders on. Abhi agle 7 din mein koi release nahi.';
+      }
+      st.textContent=txt;
+    }
+  };
+
+  window.cvNotifyToggle=function(){
+    if(!supported()){showToast('Is browser mein notifications support nahi hain',3200);return}
+    if(isOn()){
+      set(ON,'0');window.cvNotifyPaint();showToast('🔕 Release reminders off');return;
+    }
+    var go=function(){
+      set(ON,'1');window.cvNotifyPaint();
+      showToast('🔔 Release reminders on');
+      window.cvCheckReminders();
+    };
+    if(Notification.permission==='granted'){go();return}
+    if(Notification.permission==='denied'){showToast('Browser ne notifications block kiye hain — address bar ke 🔒 se allow karein',4200);return}
+    try{
+      var r=Notification.requestPermission(function(p){
+        if(p==='granted')go();else{showToast('Permission nahi mili',3000);window.cvNotifyPaint()}
+      });
+      if(r&&r.then)r.then(function(p){if(p==='granted')go();else{window.cvNotifyPaint()}}).catch(function(){});
+    }catch(e){showToast('Permission request fail hua',3000)}
+  };
+
+  window.cvNotifyTest=function(){
+    if(!supported()){showToast('Notifications support nahi hain',3000);return}
+    var fire=function(){
+      navigator.serviceWorker.ready.then(function(reg){
+        reg.showNotification('🎬 CineVerse reminders ready',{
+          body:'Aisa hi notification release ke din milega.',
+          tag:'cv-test', icon:'./icons/icon-192.png', badge:'./icons/favicon-32.png'
+        });
+        showToast('Test notification bhej di');
+      }).catch(function(){showToast('Service worker ready nahi hai — internet se kholein',3200)});
+    };
+    if(Notification.permission==='granted'){fire();return}
+    if(Notification.permission==='denied'){showToast('Browser ne notifications block kiye hain',3200);return}
+    try{Notification.requestPermission().then(function(p){if(p==='granted')fire()}).catch(function(){})}catch(e){}
+  };
+
+  /* release ke din / 3 din pehle ek-ek baar notification */
+  window.cvCheckReminders=function(){
+    if(!isOn()||!supported()||Notification.permission!=='granted')return Promise.resolve(0);
+    var list=window.cvUpcoming(3);
+    if(!list.length)return Promise.resolve(0);
+    var s=seen(), n=0;
+    return navigator.serviceWorker.ready.then(function(reg){
+      list.forEach(function(x){
+        var k=dayKey(x.date);
+        if(s[x.id]===k)return;
+        s[x.id]=k;
+        try{
+          reg.showNotification(x.days===0?'🎬 Aaj release ho rahi hai':(x.days===1?'🎬 Kal release':('🎬 '+x.days+' din mein release')),{
+            body:x.name,tag:'cv-rem-'+x.id,icon:'./icons/icon-192.png',badge:'./icons/favicon-32.png',data:{url:'./'}
+          });
+          n++;
+        }catch(e){}
+      });
+      setSeen(s);return n;
+    }).catch(function(){return 0});
+  };
+
+  function boot(){
+    window.cvNotifyPaint();
+    var tg=document.getElementById('notifyToggle');
+    if(tg){
+      tg.addEventListener('click',window.cvNotifyToggle);
+      tg.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();window.cvNotifyToggle()}});
+    }
+    setTimeout(function(){try{window.cvCheckReminders()}catch(e){}},4000);
+    document.addEventListener('visibilitychange',function(){
+      if(document.visibilityState==='visible')setTimeout(function(){try{window.cvCheckReminders()}catch(e){}},1200);
+    });
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
 </script>
 </body>
