@@ -2253,10 +2253,14 @@ document.addEventListener('DOMContentLoaded',init);
         var hs=[];
         snap.forEach(function(d){
           if(d.id.charAt(0)!=='h')return;
-          hs.push({id:d.id,t:+((d.data()||{}).t)||0});
+          var vv=d.data()||{};
+          hs.push({id:d.id,t:+vv.t||0,items:+vv.items||countItems(vv.data||'')});
         });
         hs.sort(function(a,b){return b.t-a.t});
-        var extra=hs.slice(3);
+        var keep=hs.slice(0,4).map(function(h){return h.id});
+        var big=hs.slice().sort(function(a,b){return b.items-a.items})[0];
+        if(big&&keep.indexOf(big.id)<0)keep.push(big.id);   /* sabse bada snapshot hamesha rahe */
+        var extra=hs.filter(function(h){return keep.indexOf(h.id)<0});
         return Promise.all(extra.map(function(h){
           return db.collection('users').doc(user.uid).collection('settings').doc(h.id).delete().catch(function(){});
         }));
@@ -2281,6 +2285,19 @@ document.addEventListener('DOMContentLoaded',init);
   }
 
 
+  /* Cloud par data achanak kam ho (jaise kisi khali device se "Cloud pe bhejo") to
+     is device ka data mat udaao - pehle use cloud par bhej do. */
+  function cloudTooSmall(dataStr){
+    try{
+      var remoteItems=countItems(dataStr);
+      var localItems=countItems(JSON.stringify(snapshotLocal()));
+      if(remoteItems<0||localItems<0)return false;
+      if(localItems<5)return false;                 /* naya device - kuch bachana nahi */
+      if(remoteItems===0)return true;               /* cloud khali ho gaya */
+      return remoteItems < localItems*0.6;          /* 40%+ kam ho gaya */
+    }catch(e){return false}
+  }
+
   function pullOnce(){
     if(!user)return Promise.resolve('none');
     return withTimeout(docRef().get(),15000,'read').then(function(snap){
@@ -2289,6 +2306,11 @@ document.addEventListener('DOMContentLoaded',init);
         return pushAll().then(function(){return 'pushed'});
       }
       var d=snap.data()||{};
+      if(cloudTooSmall(d.data)){
+        detail('cloud par data kam mila - is device ka data bhej rahe hain');
+        msg('Cloud par data kam tha, isliye is device ka data cloud pe bhej diya gaya.','var(--warn)');
+        return pushAll(true).then(function(okd){return okd?'pushed':'same'});
+      }
       var m=mergeRemote(d.data,d.ts,+d.t||0);
       var chain=Promise.resolve(false);
       if(m.pushNeeded){
@@ -2470,10 +2492,30 @@ document.addEventListener('DOMContentLoaded',init);
         return Promise.resolve(ask()).then(function(yes){
           if(!yes){status('Synced','var(--ok)');return}
           var changed=applyRemote(pick.data,pick.t,pick.ts);
+          /* restore kiya data ab sabse naya hai - warna reload par purana khali cloud jeet jaata hai */
+          try{
+            var ts=keyTs(),now=Date.now();
+            syncKeys().forEach(function(k){if(localStorage.getItem(k)!=null)ts[k]=now});
+            setKeyTs(ts);
+          }catch(e){}
+          status('Restoring…','var(--warn)');detail('restore ho gaya, cloud par bhej rahe hain…');
           try{sessionStorage.setItem(BACK,'1')}catch(e){}
-          status('Downloaded','var(--ok)');
-          toast('Purana data restore ho gaya - app refresh ho raha hai');
-          setTimeout(function(){location.reload()},700);
+          return pushAll(true).then(function(okd){
+            if(okd){
+              status('Synced','var(--ok)');detail('purana data restore ho gaya');
+              toast('✅ Purana data restore ho gaya — '+pick.items+' items wapas');
+              msg('','');
+            }else{
+              status('Sync paused','var(--warn)');
+              msg('Data is device par restore ho gaya, par cloud par nahi ja saka. "Cloud pe bhejo" dabaiye.','var(--warn)');
+              toast('Data restore hua — cloud par bhejne ke liye "Cloud pe bhejo" dabaiye',5000);
+            }
+            setTimeout(function(){location.reload()},900);
+          }).catch(function(){
+            status('Sync paused','var(--warn)');
+            msg('Data is device par restore ho gaya, par cloud par nahi ja saka. "Cloud pe bhejo" dabaiye.','var(--warn)');
+            setTimeout(function(){location.reload()},900);
+          });
         });
       });
     }).catch(fail);
