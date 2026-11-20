@@ -1,5 +1,5 @@
 /* CineVerse Ultimate service worker */
-const VERSION = 'v22';
+const VERSION = 'v23';
 const CACHE = 'cineverse-' + VERSION;
 const IMG_CACHE = 'cineverse-img'; /* posters version badalne par bhi bache rahein (purana v21-img activate par hat jaata hai) */
 const IMG_LIMIT = 260; /* posters ka cap - phone storage bharna band */
@@ -15,7 +15,7 @@ const SHELL = [
   './icons/favicon-32.png'
 ];
 /* Sirf ye hosts poster/artwork cache mein jaate hain. API calls (TMDB JSON, Firebase/Firestore,
-   TV schedule) kabhi cache nahi hote - pehle cache-first hone se TMDB sync purana data dikhata tha. */
+   TV schedule, api.tmdb.org fallback) kabhi cache nahi hote - pehle cache-first hone se TMDB sync purana data dikhata tha. */
 const IMG_HOSTS = /(^|\.)(image\.tmdb\.org|upload\.wikimedia\.org|i\.ytimg\.com|img\.youtube\.com|lh3\.googleusercontent\.com)$/i;
 
 /* Poster cache ko limit mein rakho: purane posters pehle nikaalo (keys insertion order mein aate hain) */
