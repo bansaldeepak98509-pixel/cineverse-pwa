@@ -1,5 +1,5 @@
 /* CineVerse Ultimate service worker */
-const VERSION = 'v23';
+const VERSION = 'v24';
 const CACHE = 'cineverse-' + VERSION;
 const IMG_CACHE = 'cineverse-img'; /* posters version badalne par bhi bache rahein (purana v21-img activate par hat jaata hai) */
 const IMG_LIMIT = 260; /* posters ka cap - phone storage bharna band */
